@@ -1,0 +1,131 @@
+# Check in BDS — Brand Style cho OpenMontage
+# Đặt file này vào: OpenMontage/styles/checkinbds-brand.yaml
+# Nguồn: CheckInBDS_BrandGuideline.docx (Trần Văn Dũng — 0983.221911)
+
+identity:
+  name: "Check in BDS"
+  category: premium-realestate
+  mood: uy tín, chuyên gia, sắc bén, không hoa mỹ
+  pace: deliberate
+  best_for: "Video bán nhà phố cao cấp TP.HCM, giáo dục tài chính BĐS, phân tích MoS/ROI cho nhà đầu tư"
+
+taste_profile:
+  design_read: "Chuyên gia định giá BĐS cao cấp: quyền lực, minh bạch, số liệu dẫn đường."
+  visual_variance: 3
+  motion_intensity: 3
+  information_density: 6
+  palette_discipline: "Đỏ đô 60% - vàng đồng 30% - trắng 10%. Không gradient trang trí, không màu neon, không pastel."
+  layout_variation: "Khối số liệu nền đỏ đô chữ vàng đồng, khung ảnh tài sản full-bleed, bảng so sánh giá căn giữa."
+  reference_strategy: "Tạo 1 ảnh tham chiếu cho mỗi nhóm cảnh trước khi sinh batch asset."
+  anti_patterns:
+    - "màu neon, pastel, màu ngoài bộ nhận diện"
+    - "font trang trí / handwriting cho nội dung chính"
+    - "hiệu ứng bóng đổ, glow, gradient đè lên logo"
+    - "nói suông không có số liệu, tỷ lệ %, so sánh trực tiếp"
+    - "chữ body dưới 10pt, chữ đậm tràn lan"
+  quality_gates:
+    - "Mọi con số trên màn hình phải có nguồn và ngày (BGĐ NQ87/2026, giá rao bán, giá giao dịch)."
+    - "Mỗi video phải có đúng 1 khối số liệu MoS dạng stat card."
+    - "Tagline MINH BẠCH - TOÀN DIỆN - HỖ TRỢ 24/7 xuất hiện ở cảnh cuối."
+    - "Logo giữ vùng bảo vệ bằng chiều cao chữ C, không cắt xén, không đổi màu."
+
+visual_language:
+  color_palette:
+    primary: ["#8B0E1A", "#6E0A14"]
+    accent: ["#D4A017"]
+    background: "#FFFFFF"
+    background_alt: "#FDF4E7"
+    text: "#3C3C3C"
+    muted: "#666666"
+    inverse_text: "#FFFFFF"
+  color_ratio: "primary 60% / accent 30% / white 10%"
+  surface_rules:
+    - "Nền trắng + chữ đỏ đô: cảnh nội dung chính, bảng phân tích."
+    - "Nền đỏ đô + chữ trắng/vàng đồng: cảnh mở, thumbnail, stat card, cảnh CTA."
+    - "Nền kem #FDF4E7 + chữ đỏ đô: cảnh diễn giải kiến thức, trích dẫn."
+  composition: lưới dọc 9:16 ưu tiên, lề rộng, một tiêu điểm mỗi khung, số liệu luôn nằm 1/3 trên
+  texture: khối màu phẳng, đường kẻ mảnh chia khối, không texture giấy, không grain trừ khi hoà ảnh thật
+
+typography:
+  headings:
+    font: "Montserrat"
+    weight: 700
+    transform: uppercase
+    tracking: "0.01em"
+  subheadings:
+    font: "Montserrat"
+    weight: 600
+  body:
+    font: "Montserrat"
+    weight: 500
+    line_height: 1.5
+  caption:
+    font: "Calibri"
+    style: italic
+    weight: 400
+  stat_card:
+    font: "Montserrat"
+    weight: 800
+    color: "#D4A017"
+    size_multiplier: 3.4
+  cta:
+    font: "Montserrat"
+    weight: 700
+    transform: uppercase
+  fallback: "Arial, Helvetica, sans-serif"
+  scale_system: "major_third"
+  max_font_families: 3
+
+motion:
+  transitions: [fade, dissolve, slide-up]
+  animation_style: "ease-out dứt khoát, số liệu đếm lên, không bounce, không kinetic rối"
+  pacing_rules:
+    min_scene_hold_seconds: 2.0
+    max_scene_hold_seconds: 8
+    text_card_hold_seconds: 3.0
+    stat_card_hold_seconds: 3.5
+    transition_duration_seconds: 0.35
+  entrance: "fade-up 16px, số liệu đếm từ 0 lên giá trị thật"
+  exit: "fade mềm"
+
+audio:
+  voice_style: "nam trung niên, chuyên gia, ấm, chắc, tốc độ vừa, không hype, không lên giọng bán hàng"
+  music_style: "nhạc nền tối giản, nhịp vừa, tông trầm sang, không EDM, không nhạc viral ồn"
+  music_duck_db: -14
+  sfx: "tối giản - chỉ nhấn ở cảnh số liệu và cảnh CTA"
+
+captions:
+  style: word-level burn-in
+  position: giữa dưới, cách đáy 18%
+  font: "Montserrat"
+  weight: 700
+  text_color: "#FFFFFF"
+  highlight_color: "#D4A017"
+  stroke: "#8B0E1A"
+  max_chars_per_line: 24
+
+brand_lockups:
+  logo_position: "góc trên phải, vùng bảo vệ = chiều cao chữ C"
+  logo_min_width_px: 80
+  end_card:
+    background: "#8B0E1A"
+    lines:
+      - "MINH BẠCH - TOÀN DIỆN - HỖ TRỢ 24/7"
+      - "Trần Văn Dũng - 0983.221911"
+      - "Check in BDS"
+    text_color: "#FFFFFF"
+    accent_color: "#D4A017"
+
+content_rules:
+  required_data:
+    - "Giá nhà nước theo Bảng giá đất TP.HCM (NQ87/2026) - tra cứu, không tự đoán"
+    - "Giá thị trường rao bán + giá giao dịch thực tế"
+    - "MoS = (Giá thị trường - Giá mua) / Giá thị trường x 100%"
+  mos_thresholds:
+    good_min: 20
+    average_min: 15
+  disclaimers:
+    - "Số liệu tham khảo tại thời điểm quay, không phải cam kết lợi nhuận."
+  forbidden_claims:
+    - "cam kết lợi nhuận, chắc chắn tăng giá, lãi x lần"
+    - "số liệu không có nguồn hoặc không có ngày"

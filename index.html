@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Check in BDS Video Studio</title>
+<meta name="description" content="Quản lý danh sách tài sản, tính biên an toàn MoS và sinh kịch bản video chuẩn thương hiệu Check in BDS.">
+<meta name="theme-color" content="#8B0E1A">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Check in BDS">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="bar">
+  <button class="bar-back" id="back" type="button" aria-label="Quay lại" hidden>‹</button>
+  <div class="mark" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="20" height="20"><g fill="currentColor"><rect x="3" y="11" width="4" height="7"/><rect x="8" y="7" width="4" height="11"/><rect x="13" y="9" width="3" height="9"/><rect x="17" y="4" width="4" height="14"/></g><path d="M2 21c3-2.2 5-2.2 8 0s7-2.2 12 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+  </div>
+  <div class="bar-txt">
+    <h1 id="bar-title">Check in BDS Video Studio</h1>
+    <p id="bar-sub">Minh bạch · Toàn diện · Hỗ trợ 24/7</p>
+  </div>
+</header>
+
+<main id="app" aria-live="polite"></main>
+
+<nav class="tabs" id="tabs" aria-label="Điều hướng chính">
+  <a href="#/" data-nav="/">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10 12 4l8 6v9a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
+    <span>Tài sản</span>
+  </a>
+  <a href="#/moi" data-nav="/moi">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+    <span>Thêm</span>
+  </a>
+  <a href="#/vh" data-nav="/vh">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z"/></svg>
+    <span>Vận hành</span>
+  </a>
+  <a href="#/luu" data-nav="/luu">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5zm2 2v5h8V6zm0 8v4h10v-4z"/></svg>
+    <span>Sao lưu</span>
+  </a>
+</nav>
+
+<div class="toasts" id="toasts" aria-live="assertive"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
