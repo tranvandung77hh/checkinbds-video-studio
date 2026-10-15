@@ -7,11 +7,14 @@ App web cho điện thoại: quản lý danh sách tài sản, tính **biên an 
 ## Làm được gì
 
 - **Lưu danh sách tài sản** — thêm, sửa, nhân bản, xoá (có hoàn tác). Tự lưu khi đang sửa, không cần bấm nút.
+- **Trạng thái** — Đang theo / Tạm dừng / Đã bán. Lọc một chạm, căn đã bán không tính vào thống kê.
 - **Tính tự động** — MoS, chênh lệch, đơn giá/m², lợi suất cho thuê, thời gian hoàn vốn, scorecard 100 điểm.
-- **Sinh kịch bản** — 5 cảnh có timecode, lời đọc, mô tả hình, 5 tiêu đề hook, hashtag.
-- **Sinh prompt OpenMontage** — khóa cứng màu, font, giọng đọc, số liệu theo Brand Guideline. Copy một nút.
+- **Chặn số liệu giả** — thiếu giá thị trường thì app **không** sinh kịch bản, báo rõ thiếu gì và nhảy thẳng tới ô cần điền. Thiếu mục tuỳ chọn (giá thuê, BGĐ, số tầng) thì tự bỏ câu đó ra, không bịa số 0.
+- **Sinh kịch bản** — cảnh có timecode, lời đọc, mô tả hình, tiêu đề hook, hashtag.
+- **Sinh prompt OpenMontage** — khóa cứng màu, font, giọng đọc, số liệu theo Brand Guideline, kèm dòng cấm agent đưa số ngoài danh sách lên hình.
+- **Chia sẻ thẳng** — nút Chia sẻ mở sheet của điện thoại, gửi kịch bản/prompt qua Zalo, Messenger, email.
 - **Cài như app** — thêm vào màn hình chính, chạy được khi mất mạng.
-- **Sao lưu** — tải file `.json`, nhập lại trên máy khác.
+- **Sao lưu** — tải file `.json`, nhập lại trên máy khác. App tự nhắc khi quá 7 ngày chưa sao lưu.
 
 ## Công thức
 
@@ -22,6 +25,7 @@ App web cho điện thoại: quản lý danh sách tài sản, tính **biên an 
 | Lợi suất thuê | `(Giá thuê × 12) / Giá bán × 100%` |
 | Hoàn vốn thuê | `Giá bán / (Giá thuê × 12)` |
 | Scorecard | MoS 30 · Pháp lý 20 · Dòng tiền 20 · Vị trí 15 · Tiện ích 15 |
+| Chưa có giá thuê | Bỏ mục dòng tiền, chấm trên thang 80 rồi quy đổi về 100 |
 
 ## Dữ liệu nằm ở đâu
 

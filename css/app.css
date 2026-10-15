@@ -104,12 +104,20 @@ main{padding:14px;max-width:640px;margin:0 auto}
 .mos-chip{flex:none;font-family:var(--font-d);font-weight:800;font-size:15px;
   padding:5px 9px;border-radius:8px;color:#fff;background:var(--tot);font-variant-numeric:tabular-nums}
 .mos-chip.c-tb{background:var(--tb)} .mos-chip.c-rui{background:var(--rui)}
-@media (prefers-color-scheme:dark){.mos-chip{color:#12100F}}
+.mos-chip.c-trong{background:var(--mat2);color:var(--phu);border:1px solid var(--vien)}
+@media (prefers-color-scheme:dark){.mos-chip{color:#12100F}.mos-chip.c-trong{color:var(--phu)}}
 
 .chip{display:inline-block;font-family:var(--font-d);font-size:9.5px;font-weight:700;
   letter-spacing:.07em;text-transform:uppercase;padding:3px 7px;border-radius:999px;
-  border:1px solid var(--vien);color:var(--phu);margin-right:5px}
+  border:1px solid var(--vien);color:var(--phu);margin-right:5px;margin-bottom:3px}
 .chip.vd{border-color:var(--vang);color:var(--tb)}
+.chip.thieu{border-color:var(--tb);color:var(--tb);background:rgba(212,160,23,.1)}
+.chip.trang{border-color:var(--phu);color:var(--chu);background:var(--mat2)}
+.item.mo{opacity:.62}
+.item.mo:active{opacity:.8}
+
+.card.canh-bao{border-color:var(--tb);border-left:4px solid var(--tb)}
+.card.canh-bao>h2{color:var(--tb)}
 
 /* ---------- dải số liệu ---------- */
 .strip{background:var(--do);border-radius:var(--r);padding:14px;color:#fff;margin-bottom:12px;
@@ -137,7 +145,10 @@ main{padding:14px;max-width:640px;margin:0 auto}
 .score>b small{font-size:14px;font-weight:700;color:var(--phu)}
 .badge{font-family:var(--font-d);font-size:10.5px;font-weight:700;letter-spacing:.06em;
   text-transform:uppercase;padding:5px 10px;border-radius:7px;border:1.5px solid currentColor}
-.b-tot{color:var(--tot)} .b-tb{color:var(--tb)} .b-rui{color:var(--rui)}
+.b-tot{color:var(--tot)} .b-tb{color:var(--tb)} .b-rui{color:var(--rui)} .b-trong{color:var(--phu)}
+.rows.ct .row{grid-template-columns:auto 1fr;gap:12px;align-items:start}
+.rows.ct .row b{white-space:nowrap}
+.rows.ct .row span{text-align:right;font-size:12.5px;color:var(--phu)}
 .rows{margin-top:12px;display:grid;gap:7px}
 .row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;font-size:13.5px;
   border-bottom:1px dashed var(--vien);padding-bottom:6px}

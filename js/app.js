@@ -1,4 +1,4 @@
-/* Check in BDS Video Studio
+/* Check in BDS Video Studio — v2
    Dữ liệu nằm trong máy anh (localStorage), không gửi đi đâu.
    MoS = (Giá thị trường − Giá mua) / Giá thị trường × 100%  — theo SOP Check in BDS */
 (function () {
@@ -34,11 +34,17 @@
     cho: { ten: "Đang chờ sổ / vướng hoàn công", ngan: "Đang chờ sổ", diem: 6 }
   };
   var MUC = { tot: { ten: "Tốt", diem: 15 }, kha: { ten: "Khá", diem: 10 }, tb: { ten: "Trung bình", diem: 6 } };
+  var TT = {
+    theo: { ten: "Đang theo", ngan: "" },
+    giu: { ten: "Tạm dừng", ngan: "Tạm dừng" },
+    xong: { ten: "Đã bán / đã chốt", ngan: "Đã bán" }
+  };
   var LOAI = ["Nhà phố", "Biệt thự", "Shophouse", "Căn hộ", "Đất nền"];
   var HUONG = ["Đông Nam", "Đông", "Nam", "Tây Nam", "Tây", "Tây Bắc", "Bắc", "Đông Bắc"];
 
   var REPO = "https://github.com/tranvandung77hh/videostudio_OpenMontage";
   var YAML_URL = "checkinbds-brand.yaml";
+  var NGAY_NHAC_SAO_LUU = 7;
 
   /* ============ tiện ích ============ */
   var $ = function (id) { return document.getElementById(id); };
@@ -49,14 +55,9 @@
   var n = function (v) { var x = parseFloat(String(v == null ? "" : v).replace(",", ".")); return isFinite(x) ? x : 0; };
   var f1 = function (v) { return (Math.round(v * 10) / 10).toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
   var f0 = function (v) { return Math.round(v).toLocaleString("vi-VN"); };
-  var gio = function (t) {
-    var d = new Date(t);
-    return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
-  };
-  var ngay = function (t) {
-    var d = new Date(t);
-    return ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear();
-  };
+  var hai = function (x) { return ("0" + x).slice(-2); };
+  var gio = function (t) { var d = new Date(t); return hai(d.getHours()) + ":" + hai(d.getMinutes()); };
+  var ngay = function (t) { var d = new Date(t); return hai(d.getDate()) + "/" + hai(d.getMonth() + 1) + "/" + d.getFullYear(); };
   var uid = function () { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); };
 
   function toast(html, giay, nut) {
@@ -85,13 +86,21 @@
     } catch (e) { toast("Máy không cho copy tự động — bấm giữ vào khối chữ để copy", 4); }
   }
 
+  function chiaSe(tieu, txt, nhan) {
+    if (navigator.share) {
+      navigator.share({ title: tieu, text: txt }).catch(function () { /* anh bấm huỷ, không làm gì */ });
+    } else {
+      copy(txt, nhan);
+    }
+  }
+
   /* ============ kho dữ liệu ============ */
   var KEY = "cibds.v1";
-  var DB = { v: 1, items: [], cai: {} };
+  var DB = { v: 2, items: [], cai: {} };
 
   function mau() {
     return {
-      id: uid(), vd: true,
+      id: uid(), vd: true, tt_trang: "theo",
       dc: "Đường Số 7, Thảo Điền", khu: "Quận 2", loai: "Nhà phố",
       dt: 80, tang: 4, pn: 5, huong: "Đông Nam", pl: "so",
       gia: 14.5, tt: 18.6, bgd: 9.8, thue: 45, vt: "tot", ta: "tot",
@@ -106,10 +115,14 @@
       var raw = localStorage.getItem(KEY);
       if (raw) {
         var d = JSON.parse(raw);
-        if (d && Array.isArray(d.items)) { DB = { v: 1, items: d.items, cai: d.cai || {} }; return; }
+        if (d && Array.isArray(d.items)) {
+          d.items.forEach(function (it) { if (!it.tt_trang) it.tt_trang = "theo"; });
+          DB = { v: 2, items: d.items, cai: d.cai || {} };
+          return;
+        }
       }
-    } catch (e) { /* bỏ qua, dùng mặc định */ }
-    DB = { v: 1, items: [mau()], cai: {} };
+    } catch (e) { /* hỏng dữ liệu, dựng lại từ đầu */ }
+    DB = { v: 2, items: [mau()], cai: {} };
     ghi();
   }
 
@@ -125,8 +138,8 @@
 
   function moi() {
     return {
-      id: uid(), dc: "", khu: "", loai: "Nhà phố", dt: "", tang: "", pn: "", huong: "Đông Nam",
-      pl: "so", gia: "", tt: "", bgd: "", thue: "", vt: "kha", ta: "kha",
+      id: uid(), tt_trang: "theo", dc: "", khu: "", loai: "Nhà phố", dt: "", tang: "", pn: "",
+      huong: "Đông Nam", pl: "so", gia: "", tt: "", bgd: "", thue: "", vt: "kha", ta: "kha",
       dang: "ban", nt: "tiktok", kh: "ndt", ghichu: "", tao: Date.now(), sua: Date.now()
     };
   }
@@ -137,38 +150,73 @@
     var mos = tt > 0 ? (tt - gia) / tt * 100 : 0;
     var yld = gia > 0 ? (thue * 12) / (gia * 1000) * 100 : 0;
     var c = {
-      gia: gia, tt: tt, thue: thue, dt: dt, bgd: n(it.bgd),
-      tang: n(it.tang), pn: n(it.pn),
+      gia: gia, tt: tt, thue: thue, dt: dt, bgd: n(it.bgd), tang: n(it.tang), pn: n(it.pn),
       mos: mos, chenh: tt - gia, dongia: dt > 0 ? gia * 1000 / dt : 0,
       yld: yld, hv: yld > 0 ? 100 / yld : 0,
       pl: PL[it.pl] || PL.so, vt: MUC[it.vt] || MUC.kha, ta: MUC[it.ta] || MUC.kha,
       dang: DANG[it.dang] || DANG.ban, nt: NT[it.nt] || NT.tiktok, kh: KH[it.kh] || KH.ndt,
+      trang: TT[it.tt_trang] || TT.theo, maTrang: it.tt_trang || "theo",
       dc: (it.dc || "").trim() || "Tài sản chưa đặt tên",
-      khu: (it.khu || "").trim() || "TP.HCM",
-      loai: it.loai || "Nhà phố", huong: it.huong || "Đông Nam",
-      loaiVideo: it.dang || "ban", duLieu: tt > 0 && gia > 0
+      khu: (it.khu || "").trim(), loai: it.loai || "Nhà phố", huong: it.huong || "Đông Nam",
+      loaiVideo: it.dang || "ban"
     };
+    c.coGia = gia > 0 && tt > 0;
+    c.coThue = thue > 0;
     c.mosDiem = mos >= 20 ? 30 : (mos >= 15 ? 20 : 10);
     c.dtDiem = yld >= 6 ? 20 : (yld >= 4 ? 14 : (yld > 0 ? 8 : 0));
-    c.diem = c.mosDiem + c.pl.diem + c.dtDiem + c.vt.diem + c.ta.diem;
-    c.hang = c.mos >= 20 ? "tot" : (c.mos >= 15 ? "tb" : "rui");
-    c.nhan = c.mos >= 20 ? "An toàn — đạt chuẩn 20%" : (c.mos >= 15 ? "Trung bình — cần đàm phán" : "Dưới chuẩn — đàm phán lại giá");
-    c.chot = c.diem >= 80 ? "Nên mua — ưu tiên cao" : (c.diem >= 65 ? "Cân nhắc — đàm phán thêm" : "Đàm phán lại giá");
-    c.chotHang = c.diem >= 80 ? "tot" : (c.diem >= 65 ? "tb" : "rui");
+    c.thang = c.coThue ? 100 : 80;                       // chưa có giá thuê thì bỏ mục dòng tiền khỏi thang
+    c.diemTho = c.mosDiem + c.pl.diem + (c.coThue ? c.dtDiem : 0) + c.vt.diem + c.ta.diem;
+    c.diem = c.coGia ? Math.round(c.diemTho / c.thang * 100) : null;
+    c.hang = !c.coGia ? "trong" : (mos >= 20 ? "tot" : (mos >= 15 ? "tb" : "rui"));
+    c.nhan = !c.coGia ? "Chưa đủ giá để tính"
+      : (mos >= 20 ? "An toàn — đạt chuẩn 20%" : (mos >= 15 ? "Trung bình — cần đàm phán" : "Dưới chuẩn — đàm phán lại giá"));
+    c.chot = c.diem == null ? "Chưa đủ dữ liệu"
+      : (c.diem >= 80 ? "Nên mua — ưu tiên cao" : (c.diem >= 65 ? "Cân nhắc — đàm phán thêm" : "Đàm phán lại giá"));
+    c.chotHang = c.diem == null ? "trong" : (c.diem >= 80 ? "tot" : (c.diem >= 65 ? "tb" : "rui"));
     return c;
   }
 
+  /* thiếu gì: chan = thiếu cái này thì không sinh kịch bản được; nen = nên bổ sung cho bài chắc hơn */
+  function thieu(it, c) {
+    var chan = [], nen = [];
+    if (!(it.dc || "").trim()) chan.push("Địa chỉ / tên đường");
+    if (c.dang.mode === "scene") {
+      if (!(c.tt > 0)) chan.push("Giá thị trường");
+      if (!(c.gia > 0)) chan.push("Giá bán / chào");
+    }
+    if (!(it.khu || "").trim()) nen.push("Khu vực");
+    if (c.loaiVideo === "ban" || c.loaiVideo === "cinematic") {
+      if (!(c.dt > 0)) nen.push("Diện tích");
+      if (!(c.tang > 0)) nen.push("Số tầng");
+    }
+    if (c.loaiVideo === "ban") {
+      if (!(c.bgd > 0)) nen.push("Giá BGĐ NQ87");
+      if (!(c.thue > 0)) nen.push("Giá thuê");
+    }
+    return { chan: chan, nen: nen };
+  }
+
   /* ============ sinh kịch bản ============ */
+  function cau(parts) { return parts.filter(Boolean).join(""); }
+
   function canh(c) {
-    var S = c.nt.sec, k = c.khu, gia = f1(c.gia), tt = f1(c.tt), mos = f1(c.mos);
+    var S = c.nt.sec, k = c.khu || "khu vực này", gia = f1(c.gia), tt = f1(c.tt), mos = f1(c.mos);
     var t = function (p) { return Math.round(S * p); };
+    var kichThuoc = cau([
+      c.dt > 0 ? f0(c.dt) + " mét vuông" : "",
+      c.dt > 0 && c.tang > 0 ? ", " : "",
+      c.tang > 0 ? c.tang + " tầng" : ""
+    ]);
+
     if (c.loaiVideo === "cinematic") {
       return [
         [0, t(.15), "MỞ — KHÔNG LỜI", "(không thoại, chỉ nhạc nền trầm)",
           "Flycam hạ chậm xuống mặt tiền " + c.loai.toLowerCase() + " " + c.dc + ". Dải đỏ đô, chữ vàng đồng: tên đường."],
-        [t(.15), t(.45), "KHÔNG GIAN", c.dc + ". " + c.dt + " mét vuông, " + c.tang + " tầng, hướng " + c.huong + ".",
+        [t(.15), t(.45), "KHÔNG GIAN",
+          cau([c.dc, ". ", kichThuoc ? kichThuoc + ", " : "", "hướng ", c.huong, "."]),
           "Lia chậm qua phòng khách, cầu thang, sân thượng. Giữ mỗi khung 3 giây, không cắt nhanh."],
-        [t(.45), t(.7), "GIÁ TRỊ", "Giá thị trường khu này " + tt + " tỷ. Căn này " + gia + " tỷ. Biên an toàn " + mos + " phần trăm.",
+        [t(.45), t(.7), "GIÁ TRỊ",
+          "Giá thị trường khu này " + tt + " tỷ. Căn này " + gia + " tỷ. Biên an toàn " + mos + " phần trăm.",
           "Stat card nền đỏ đô, số vàng đồng đếm lên. Đây là khung duy nhất có số liệu."],
         [t(.7), t(.88), "NGƯỜI MUA", "Dành cho " + c.kh.ten.toLowerCase() + " — " + c.kh.goc + ".",
           "Chân dung người xem nhà, bàn làm việc, ánh sáng chiều. Không cần thấy rõ mặt."],
@@ -176,6 +224,7 @@
           "End card nền đỏ đô: MINH BẠCH – TOÀN DIỆN – HỖ TRỢ 24/7, số điện thoại vàng đồng."]
       ];
     }
+
     if (c.loaiVideo === "giaoduc") {
       return [
         [0, t(.1), "HOOK — SỐ LIỆU",
@@ -195,9 +244,10 @@
           "End card nền đỏ đô, tagline và số 0983.221911."]
       ];
     }
+
     return [
       [0, t(.1), "HOOK — SỐ LIỆU",
-        c.loai + " " + c.dc + ". " + c.dt + " mét vuông, " + c.tang + " tầng. Giá thị trường " + tt + " tỷ. Chủ bán " + gia + " tỷ.",
+        cau([c.loai, " ", c.dc, ". ", kichThuoc ? kichThuoc + ". " : "", "Giá thị trường ", tt, " tỷ. Chủ bán ", gia, " tỷ."]),
         "Mặt tiền tài sản, số lớn vàng đồng trên dải đỏ đô một phần ba trên khung."],
       [t(.1), t(.28), "VẤN ĐỀ",
         "Phần lớn khách mua ở " + k + " trả đúng giá thị trường. Mua xong là hết biên an toàn, muốn bán lại phải chờ thị trường kéo.",
@@ -206,9 +256,14 @@
         "Nhiều người xem hai ba căn thấy thích là chốt. Không tra bảng giá đất, không so năm tài sản tương đương trong bán kính một kilomet.",
         "Minh họa phẳng ba bước bị gạch đỏ. Nền kem, chữ đỏ đô."],
       [t(.5), t(.8), "GIẢI PHÁP — SỐ LIỆU",
-        "Căn này: giá nhà nước " + f1(c.bgd) + " tỷ, giá thị trường " + tt + " tỷ, chủ bán " + gia + " tỷ. Biên an toàn " + mos +
-        " phần trăm. Cho thuê " + f0(c.thue) + " triệu một tháng, lợi suất " + f1(c.yld) + " phần trăm. " + c.pl.ten + ".",
-        "Stat card nền đỏ đô, bảng bốn dòng, số vàng đồng đếm lên. Giữ 3,5 giây."],
+        cau([
+          "Căn này: ",
+          c.bgd > 0 ? "giá nhà nước " + f1(c.bgd) + " tỷ, " : "",
+          "giá thị trường ", tt, " tỷ, chủ bán ", gia, " tỷ. Biên an toàn ", mos, " phần trăm.",
+          c.coThue ? " Cho thuê " + f0(c.thue) + " triệu một tháng, lợi suất " + f1(c.yld) + " phần trăm." : "",
+          " ", c.pl.ten, "."
+        ]),
+        "Stat card nền đỏ đô, bảng số liệu, số vàng đồng đếm lên. Giữ 3,5 giây."],
       [t(.8), S, "CTA",
         "Hợp với " + c.kh.ten.toLowerCase() + ". Gọi em xem nhà miễn phí. Trần Văn Dũng, không chín tám ba, hai hai một, chín một một.",
         "End card nền đỏ đô: MINH BẠCH – TOÀN DIỆN – HỖ TRỢ 24/7 và số điện thoại vàng đồng."]
@@ -237,17 +292,20 @@
   }
 
   function hooks(c) {
-    return [
-      f1(c.chenh) + " TỶ CHÊNH LỆCH — CÙNG MỘT CĂN Ở " + c.khu.toUpperCase(),
-      "CHỦ CẦN BÁN: " + c.loai.toUpperCase() + " " + c.dc.toUpperCase() + " DƯỚI GIÁ THỊ TRƯỜNG " + f1(c.mos) + "%",
-      "CHO THUÊ " + f0(c.thue) + " TRIỆU/THÁNG — LỢI SUẤT " + f1(c.yld) + "%/NĂM, HOÀN VỐN " + f1(c.hv) + " NĂM",
-      "BIÊN AN TOÀN " + f1(c.mos) + "% — CHUẨN MoS CHECK IN BDS CHỈ TƯ VẤN TỪ 20%",
-      "GỌI NGAY XEM NHÀ MIỄN PHÍ — 0983.221911 | MINH BẠCH, TOÀN DIỆN, HỖ TRỢ 24/7"
-    ];
+    var h = [];
+    if (c.coGia) h.push(f1(c.chenh) + " TỶ CHÊNH LỆCH — CÙNG MỘT CĂN Ở " + (c.khu || "KHU NÀY").toUpperCase());
+    h.push("CHỦ CẦN BÁN: " + c.loai.toUpperCase() + " " + c.dc.toUpperCase() +
+      (c.coGia ? " DƯỚI GIÁ THỊ TRƯỜNG " + f1(c.mos) + "%" : ""));
+    if (c.coThue) h.push("CHO THUÊ " + f0(c.thue) + " TRIỆU/THÁNG — LỢI SUẤT " + f1(c.yld) + "%/NĂM, HOÀN VỐN " + f1(c.hv) + " NĂM");
+    if (c.coGia) h.push("BIÊN AN TOÀN " + f1(c.mos) + "% — CHUẨN MoS CHECK IN BDS CHỈ TƯ VẤN TỪ 20%");
+    if (c.dt > 0) h.push(f0(c.dt) + " M² " + c.loai.toUpperCase() + " " + (c.khu || "TP.HCM").toUpperCase() +
+      (c.dongia > 0 ? " — CHỈ " + f0(c.dongia) + " TRIỆU/M²" : ""));
+    h.push("GỌI NGAY XEM NHÀ MIỄN PHÍ — 0983.221911 | MINH BẠCH, TOÀN DIỆN, HỖ TRỢ 24/7");
+    return h.slice(0, 5);
   }
 
   function tags(c) {
-    var kv = c.khu.replace(/\s+/g, ""), lh = c.loai.replace(/\s+/g, "");
+    var kv = (c.khu || "TPHCM").replace(/\s+/g, ""), lh = c.loai.replace(/\s+/g, "");
     return ["#CheckInBDS", "#" + lh + kv, "#BanNha" + kv, "#DauTuBDS", "#BienAnToan20", "#MoS",
       "#NhaPhoDongTien", "#BDSTPHCM", "#" + kv, "#TranVanDung"].join("  ");
   }
@@ -262,9 +320,9 @@
       }).join("\n\n");
     }
     var h = hooks(c);
-    return c.dang.ten.toUpperCase() + " — " + c.dc + ", " + c.khu + "\n" +
+    return c.dang.ten.toUpperCase() + " — " + c.dc + (c.khu ? ", " + c.khu : "") + "\n" +
       c.nt.ten + " | " + c.nt.res + " | " + c.nt.sec + "s\n\n" + txt +
-      "\n\n5 TIÊU ĐỀ HOOK\n" + h.map(function (x, i) { return (i + 1) + ". " + x; }).join("\n") +
+      "\n\nTIÊU ĐỀ HOOK\n" + h.map(function (x, i) { return (i + 1) + ". " + x; }).join("\n") +
       "\n\nHASHTAG\n" + tags(c);
   }
 
@@ -287,20 +345,31 @@
     L.push("- KHÔNG dùng: màu neon, pastel, màu ngoài bộ nhận diện, font trang trí, quá 3 font");
     L.push("");
     L.push("TÀI SẢN:");
-    L.push("- " + c.loai + " " + c.dc + ", " + c.khu);
-    L.push("- " + c.dt + " m², " + c.tang + " tầng, " + c.pn + " phòng ngủ, hướng " + c.huong);
+    L.push("- " + c.loai + " " + c.dc + (c.khu ? ", " + c.khu : ""));
+    var ktc = [];
+    if (c.dt > 0) ktc.push(f0(c.dt) + " m²");
+    if (c.tang > 0) ktc.push(c.tang + " tầng");
+    if (c.pn > 0) ktc.push(c.pn + " phòng ngủ");
+    ktc.push("hướng " + c.huong);
+    L.push("- " + ktc.join(", "));
     L.push("- Pháp lý: " + c.pl.ten);
     L.push("");
     L.push("SỐ LIỆU — CHỈ DÙNG ĐÚNG CÁC SỐ NÀY, KHÔNG TỰ SUY DIỄN, KHÔNG BỊA SỐ THỊ TRƯỜNG:");
-    L.push("- Giá theo Bảng giá đất NQ87/2026: " + f1(c.bgd) + " tỷ");
-    L.push("- Giá thị trường: " + f1(c.tt) + " tỷ");
-    L.push("- Giá chủ bán: " + f1(c.gia) + " tỷ");
-    L.push("- Chênh lệch: " + f1(c.chenh) + " tỷ");
-    L.push("- MoS = (Giá thị trường − Giá mua) / Giá thị trường × 100% = " + f1(c.mos) + "%");
-    L.push("- Đơn giá: " + f0(c.dongia) + " triệu/m²");
-    L.push("- Cho thuê: " + f0(c.thue) + " triệu/tháng, lợi suất " + f1(c.yld) + "%/năm, hoàn vốn " + f1(c.hv) + " năm");
-    L.push("- Scorecard: " + c.diem + "/100 (MoS " + c.mosDiem + "/30, pháp lý " + c.pl.diem + "/20, dòng tiền " +
-      c.dtDiem + "/20, vị trí " + c.vt.diem + "/15, tiện ích " + c.ta.diem + "/15)");
+    if (c.bgd > 0) L.push("- Giá theo Bảng giá đất NQ87/2026: " + f1(c.bgd) + " tỷ");
+    if (c.coGia) {
+      L.push("- Giá thị trường: " + f1(c.tt) + " tỷ");
+      L.push("- Giá chủ bán: " + f1(c.gia) + " tỷ");
+      L.push("- Chênh lệch: " + f1(c.chenh) + " tỷ");
+      L.push("- MoS = (Giá thị trường − Giá mua) / Giá thị trường × 100% = " + f1(c.mos) + "%");
+    }
+    if (c.dongia > 0) L.push("- Đơn giá: " + f0(c.dongia) + " triệu/m²");
+    if (c.coThue) L.push("- Cho thuê: " + f0(c.thue) + " triệu/tháng, lợi suất " + f1(c.yld) + "%/năm, hoàn vốn " + f1(c.hv) + " năm");
+    if (c.diem != null) {
+      L.push("- Scorecard: " + c.diem + "/100 (MoS " + c.mosDiem + "/30, pháp lý " + c.pl.diem + "/20" +
+        (c.coThue ? ", dòng tiền " + c.dtDiem + "/20" : "") + ", vị trí " + c.vt.diem + "/15, tiện ích " + c.ta.diem + "/15" +
+        (c.coThue ? "" : " — chưa có giá thuê nên quy đổi từ thang 80") + ")");
+    }
+    L.push("- KHÔNG đưa lên hình bất kỳ con số nào ngoài danh sách này.");
     L.push("");
     L.push("KHÁCH MỤC TIÊU: " + c.kh.ten + " — " + c.kh.goc);
     L.push("Thông điệp cần chạm: " + c.kh.moi);
@@ -339,18 +408,15 @@
       return '<option value="' + esc(v) + '"' + (String(v) === String(val) ? " selected" : "") + ">" + esc(t) + "</option>";
     }).join("");
   }
-  var keys = function (obj) {
-    return Object.keys(obj).map(function (k) { return [k, obj[k].ten]; });
-  };
+  var keys = function (obj) { return Object.keys(obj).map(function (k) { return [k, obj[k].ten]; }); };
 
   function fieldHTML(f, it) {
-    var v = it[f.k];
-    var cls = f.full ? "full" : "";
+    var v = it[f.k], cls = f.full ? "full" : "";
     var h = '<div class="' + cls + '"><label for="f-' + f.k + '">' + esc(f.l) + "</label>";
     if (f.t === "select") h += '<select id="f-' + f.k + '" data-k="' + f.k + '">' + opt(f.o, v) + "</select>";
     else if (f.t === "area") h += '<textarea id="f-' + f.k + '" data-k="' + f.k + '" placeholder="' + esc(f.ph || "") + '">' + esc(v) + "</textarea>";
-    else if (f.t === "num") h += '<input id="f-' + f.k + '" data-k="' + f.k + '" inputmode="decimal" value="' + esc(v) + '" placeholder="' + esc(f.ph || "") + '">';
-    else h += '<input id="f-' + f.k + '" data-k="' + f.k + '" value="' + esc(v) + '" placeholder="' + esc(f.ph || "") + '">';
+    else if (f.t === "num") h += '<input id="f-' + f.k + '" data-k="' + f.k + '" inputmode="decimal" autocomplete="off" value="' + esc(v) + '" placeholder="' + esc(f.ph || "") + '">';
+    else h += '<input id="f-' + f.k + '" data-k="' + f.k + '" autocomplete="off" value="' + esc(v) + '" placeholder="' + esc(f.ph || "") + '">';
     return h + "</div>";
   }
 
@@ -359,6 +425,7 @@
       ten: "Thông tin tài sản", f: [
         { k: "dc", l: "Địa chỉ / tên đường", t: "text", full: true, ph: "Đường Số 7, Thảo Điền" },
         { k: "khu", l: "Khu vực", t: "text", ph: "Quận 2" },
+        { k: "tt_trang", l: "Trạng thái", t: "select", o: keys(TT) },
         { k: "loai", l: "Loại hình", t: "select", o: LOAI },
         { k: "dt", l: "Diện tích (m²)", t: "num", ph: "80" },
         { k: "tang", l: "Số tầng", t: "num", ph: "4" },
@@ -368,7 +435,8 @@
       ]
     },
     {
-      ten: "Giá & dòng tiền", nhac: "Giá thị trường lấy từ nguồn thật: 5 tin rao bán tương đương bán kính 500m–1km, cộng giá giao dịch văn phòng đăng ký đất đai. Không ước lượng.",
+      ten: "Giá & dòng tiền",
+      nhac: "Giá thị trường lấy từ nguồn thật: 5 tin rao bán tương đương bán kính 500m–1km, cộng giá giao dịch văn phòng đăng ký đất đai. Không ước lượng.",
       f: [
         { k: "gia", l: "Giá bán / chào (tỷ)", t: "num", ph: "14.5" },
         { k: "tt", l: "Giá thị trường (tỷ)", t: "num", ph: "18.6" },
@@ -398,126 +466,163 @@
 
   function stripHTML(c) {
     return '<div class="strip">' +
-      '<div class="mos"><b>' + (c.duLieu ? f1(c.mos) + "%" : "—") + "</b><span>MoS biên an toàn</span></div>" +
-      '<div><span class="pill">' + esc(c.duLieu ? c.nhan : "Chưa đủ giá để tính") + "</span></div>" +
+      '<div class="mos"><b>' + (c.coGia ? f1(c.mos) + "%" : "—") + "</b><span>MoS biên an toàn</span></div>" +
+      '<div><span class="pill">' + esc(c.nhan) + "</span></div>" +
       '<div class="cells">' +
-      '<div class="cell"><i>Chênh lệch</i><b>' + (c.duLieu ? f1(c.chenh) + " tỷ" : "—") + "</b></div>" +
-      '<div class="cell"><i>Đơn giá</i><b>' + (c.dt > 0 && c.gia > 0 ? f0(c.dongia) + " tr/m²" : "—") + "</b></div>" +
-      '<div class="cell"><i>Lợi suất thuê</i><b>' + (c.yld > 0 ? f1(c.yld) + "%/năm" : "—") + "</b></div>" +
-      '<div class="cell"><i>Hoàn vốn thuê</i><b>' + (c.yld > 0 ? f1(c.hv) + " năm" : "—") + "</b></div>" +
+      '<div class="cell"><i>Chênh lệch</i><b>' + (c.coGia ? f1(c.chenh) + " tỷ" : "—") + "</b></div>" +
+      '<div class="cell"><i>Đơn giá</i><b>' + (c.dongia > 0 ? f0(c.dongia) + " tr/m²" : "—") + "</b></div>" +
+      '<div class="cell"><i>Lợi suất thuê</i><b>' + (c.coThue ? f1(c.yld) + "%/năm" : "—") + "</b></div>" +
+      '<div class="cell"><i>Hoàn vốn thuê</i><b>' + (c.coThue ? f1(c.hv) + " năm" : "—") + "</b></div>" +
       "</div></div>";
   }
 
   function scoreHTML(c) {
-    var r = [
-      ["Biên an toàn MoS", c.mosDiem, 30],
-      ["Pháp lý — " + c.pl.ngan, c.pl.diem, 20],
-      ["Dòng tiền cho thuê", c.dtDiem, 20],
-      ["Vị trí — " + c.vt.ten, c.vt.diem, 15],
-      ["Tiện ích — " + c.ta.ten, c.ta.diem, 15]
-    ];
+    var r = [["Biên an toàn MoS", c.mosDiem, 30], ["Pháp lý — " + c.pl.ngan, c.pl.diem, 20]];
+    if (c.coThue) r.push(["Dòng tiền cho thuê", c.dtDiem, 20]);
+    r.push(["Vị trí — " + c.vt.ten, c.vt.diem, 15], ["Tiện ích — " + c.ta.ten, c.ta.diem, 15]);
     return '<div class="card"><h2>Scorecard 100 điểm</h2>' +
-      '<div class="score"><b>' + c.diem + "<small>/100</small></b>" +
+      '<div class="score"><b>' + (c.diem == null ? "—" : c.diem) + "<small>/100</small></b>" +
       '<span class="badge b-' + c.chotHang + '">' + esc(c.chot) + "</span></div>" +
-      '<div class="rows">' + r.map(function (x) {
-        return '<div class="row"><span>' + esc(x[0]) +
-          '<span class="bar-mini"><span style="width:' + Math.round(x[1] / x[2] * 100) + '%"></span></span></span>' +
-          "<b>" + x[1] + "/" + x[2] + "</b></div>";
-      }).join("") + "</div></div>";
+      (c.diem == null ? '<p class="hint" style="margin:10px 0 0">Nhập giá bán và giá thị trường để chấm điểm.</p>' :
+        '<div class="rows">' + r.map(function (x) {
+          return '<div class="row"><span>' + esc(x[0]) +
+            '<span class="bar-mini"><span style="width:' + Math.round(x[1] / x[2] * 100) + '%"></span></span></span>' +
+            "<b>" + x[1] + "/" + x[2] + "</b></div>";
+        }).join("") + "</div>" +
+        (c.coThue ? "" : '<p class="hint" style="margin:10px 0 0">Chưa có giá thuê nên bỏ mục dòng tiền, điểm quy đổi từ thang 80.</p>')) +
+      "</div>";
   }
 
-  /* ============ các màn hình ============ */
-  function vDanhSach() {
+  function thieuHTML(t, id, chan) {
+    var ds = chan ? t.chan : t.nen;
+    if (!ds.length) return "";
+    return '<div class="card ' + (chan ? "canh-bao" : "") + '">' +
+      "<h2>" + (chan ? "Thiếu " + ds.length + " thông tin bắt buộc" : "Nên bổ sung " + ds.length + " thông tin") + "</h2>" +
+      '<p class="hint">' + (chan
+        ? "App không sinh kịch bản khi thiếu số liệu — để tránh đưa số sai lên video. Điền xong là có ngay."
+        : "Bài sẽ chắc hơn nếu có thêm. Thiếu thì app tự bỏ câu đó ra khỏi kịch bản, không bịa số.") + "</p>" +
+      '<div class="rows">' + ds.map(function (x) {
+        return '<div class="row" style="grid-template-columns:1fr auto"><span>' + esc(x) + "</span><b>" + (chan ? "bắt buộc" : "tuỳ chọn") + "</b></div>";
+      }).join("") + "</div>" +
+      '<a class="btn' + (chan ? "" : " alt") + '" href="#/sua/' + esc(id) + '">Điền ngay</a></div>';
+  }
+
+  /* ============ màn hình: danh sách ============ */
+  function locDS() {
     var q = (DB.cai.q || "").toLowerCase().trim();
     var sx = DB.cai.sx || "moi";
+    var loc = DB.cai.loc || "theo";
     var ds = DB.items.slice();
+    if (loc !== "tat") ds = ds.filter(function (it) { return (it.tt_trang || "theo") === loc; });
     if (q) ds = ds.filter(function (it) {
       return ((it.dc || "") + " " + (it.khu || "") + " " + (it.loai || "") + " " + (it.ghichu || "")).toLowerCase().indexOf(q) >= 0;
     });
     ds = ds.map(function (it) { return { it: it, c: tinh(it) }; });
     var sort = {
       moi: function (a, b) { return (b.it.sua || 0) - (a.it.sua || 0); },
-      mos: function (a, b) { return b.c.mos - a.c.mos; },
-      diem: function (a, b) { return b.c.diem - a.c.diem; },
-      gia: function (a, b) { return a.c.gia - b.c.gia; }
+      mos: function (a, b) { return (b.c.coGia ? b.c.mos : -999) - (a.c.coGia ? a.c.mos : -999); },
+      diem: function (a, b) { return (b.c.diem == null ? -1 : b.c.diem) - (a.c.diem == null ? -1 : a.c.diem); },
+      gia: function (a, b) { return (a.c.gia || 1e9) - (b.c.gia || 1e9); }
     };
-    ds.sort(sort[sx] || sort.moi);
+    return ds.sort(sort[sx] || sort.moi);
+  }
 
-    var tong = DB.items.length;
+  function thanDS() {
+    var ds = locDS();
+    var dangTheo = DB.items.filter(function (it) { return (it.tt_trang || "theo") === "theo"; });
     var dat = 0, chenh = 0;
-    DB.items.forEach(function (it) { var c = tinh(it); if (c.duLieu && c.mos >= 20) dat++; if (c.duLieu) chenh += c.chenh; });
+    dangTheo.forEach(function (it) {
+      var c = tinh(it);
+      if (c.coGia && c.mos >= 20) dat++;
+      if (c.coGia && c.chenh > 0) chenh += c.chenh;
+    });
 
-    var h = '<div class="screen">';
-    h += '<div class="tiles">' +
-      '<div class="tile"><i>Tài sản</i><b>' + tong + "</b></div>" +
+    var h = '<div class="tiles">' +
+      '<div class="tile"><i>Đang theo</i><b>' + dangTheo.length + "</b></div>" +
       '<div class="tile"><i>Đạt MoS 20%</i><b>' + dat + "</b></div>" +
-      '<div class="tile"><i>Tổng chênh lệch</i><b>' + f1(chenh) + '<small> tỷ</small></b></div></div>';
-
-    if (tong > 0) {
-      h += '<div class="tools">' +
-        '<input id="q" placeholder="Tìm địa chỉ, khu vực…" value="' + esc(DB.cai.q || "") + '" enterkeyhint="search">' +
-        '<select id="sx" aria-label="Sắp xếp">' + opt([["moi", "Mới nhất"], ["mos", "MoS cao"], ["diem", "Điểm cao"], ["gia", "Giá thấp"]], sx) + "</select></div>";
-    }
+      '<div class="tile"><i>Chênh lệch gom</i><b>' + f1(chenh) + '<small> tỷ</small></b></div></div>';
 
     if (!ds.length) {
+      var q = (DB.cai.q || "").trim();
       h += '<div class="card empty">' +
         '<svg viewBox="0 0 24 24" width="54" height="54" fill="currentColor"><path d="M4 10 12 4l8 6v9a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>' +
-        "<h2>" + (q ? "Không tìm thấy tài sản" : "Chưa có tài sản nào") + "</h2>" +
-        "<p>" + (q ? "Thử từ khoá khác, hoặc xoá ô tìm kiếm." : "Chạm nút cộng để thêm căn đầu tiên. Nhập giá bán và giá thị trường là có ngay MoS.") + "</p>" +
-        (q ? "" : '<a class="btn" href="#/moi" style="max-width:220px;margin:14px auto 0">Thêm tài sản</a>') +
-        "</div>";
-    } else {
-      h += '<div class="list">' + ds.map(function (x) {
-        var it = x.it, c = x.c;
-        return '<a class="item" href="#/ts/' + esc(it.id) + '">' +
-          '<div class="item-top"><div style="flex:1;min-width:0">' +
-          "<h3>" + esc(c.dc) + "</h3>" +
-          '<p class="item-meta">' + esc(c.khu) + " · " + esc(c.loai) +
-          (c.dt > 0 ? " · " + f0(c.dt) + " m²" : "") + "</p>" +
-          (it.vd ? '<span class="chip vd">Ví dụ mẫu</span>' : "") +
-          '<span class="chip">' + esc(c.dang.ten.split("—")[0].trim()) + "</span>" +
-          "</div>" +
-          '<span class="mos-chip c-' + c.hang + '">' + (c.duLieu ? f1(c.mos) + "%" : "—") + "</span></div>" +
-          '<div class="item-num">' +
-          "<div><i>Chủ bán</i><b>" + (c.gia > 0 ? f1(c.gia) + " tỷ" : "—") + "</b></div>" +
-          "<div><i>Thị trường</i><b>" + (c.tt > 0 ? f1(c.tt) + " tỷ" : "—") + "</b></div>" +
-          "<div><i>Điểm</i><b>" + c.diem + "/100</b></div>" +
-          "</div></a>";
-      }).join("") + "</div>";
+        "<h2>" + (q ? "Không tìm thấy tài sản" : "Chưa có tài sản nào ở mục này") + "</h2>" +
+        "<p>" + (q ? "Thử từ khoá khác, hoặc xoá ô tìm kiếm."
+          : "Chạm nút cộng để thêm căn đầu tiên. Chỉ cần địa chỉ, giá bán và giá thị trường là có ngay MoS.") + "</p>" +
+        (q ? "" : '<a class="btn" href="#/moi" style="max-width:220px;margin:14px auto 0">Thêm tài sản</a>') + "</div>";
+      return h;
     }
-    h += "</div>";
+
+    h += '<div class="list">' + ds.map(function (x) {
+      var it = x.it, c = x.c, t = thieu(it, c);
+      return '<a class="item' + (c.maTrang === "theo" ? "" : " mo") + '" href="#/ts/' + esc(it.id) + '">' +
+        '<div class="item-top"><div style="flex:1;min-width:0">' +
+        "<h3>" + esc(c.dc) + "</h3>" +
+        '<p class="item-meta">' + esc([c.khu, c.loai, c.dt > 0 ? f0(c.dt) + " m²" : ""].filter(Boolean).join(" · ")) + "</p>" +
+        (it.vd ? '<span class="chip vd">Ví dụ mẫu</span>' : "") +
+        (c.trang.ngan ? '<span class="chip trang">' + esc(c.trang.ngan) + "</span>" : "") +
+        (t.chan.length ? '<span class="chip thieu">Thiếu ' + t.chan.length + " thông tin</span>" : "") +
+        '<span class="chip">' + esc(c.dang.ten.split("—")[0].trim()) + "</span>" +
+        "</div>" +
+        '<span class="mos-chip c-' + c.hang + '">' + (c.coGia ? f1(c.mos) + "%" : "—") + "</span></div>" +
+        '<div class="item-num">' +
+        "<div><i>Chủ bán</i><b>" + (c.gia > 0 ? f1(c.gia) + " tỷ" : "—") + "</b></div>" +
+        "<div><i>Thị trường</i><b>" + (c.tt > 0 ? f1(c.tt) + " tỷ" : "—") + "</b></div>" +
+        "<div><i>Điểm</i><b>" + (c.diem == null ? "—" : c.diem + "/100") + "</b></div>" +
+        "</div></a>";
+    }).join("") + "</div>";
+    return h;
+  }
+
+  function vDanhSach() {
+    var loc = DB.cai.loc || "theo";
+    var h = '<div class="screen">';
+    h += '<div class="seg" id="loc">' +
+      [["theo", "Đang theo"], ["xong", "Đã bán"], ["tat", "Tất cả"]].map(function (x) {
+        return '<button type="button" data-loc="' + x[0] + '" aria-selected="' + (loc === x[0]) + '">' + x[1] + "</button>";
+      }).join("") + "</div>";
+    h += '<div class="tools">' +
+      '<input id="q" placeholder="Tìm địa chỉ, khu vực…" value="' + esc(DB.cai.q || "") + '" enterkeyhint="search" autocomplete="off">' +
+      '<select id="sx" aria-label="Sắp xếp">' +
+      opt([["moi", "Mới nhất"], ["mos", "MoS cao"], ["diem", "Điểm cao"], ["gia", "Giá thấp"]], DB.cai.sx || "moi") +
+      "</select></div>";
+    h += '<div id="ds-body">' + thanDS() + "</div></div>";
     h += '<a class="fab" href="#/moi" aria-label="Thêm tài sản"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg></a>';
     return h;
   }
 
+  /* ============ màn hình: chi tiết ============ */
+  function khongThay() {
+    return '<div class="card empty"><h2>Không tìm thấy tài sản</h2><p>Có thể anh đã xoá nó rồi.</p>' +
+      '<a class="btn" href="#/" style="max-width:220px;margin:14px auto 0">Về danh sách</a></div>';
+  }
+
   function vChiTiet(id, tab) {
     var it = tim(id);
-    if (!it) return '<div class="card empty"><h2>Không tìm thấy tài sản</h2><p>Có thể anh đã xoá nó rồi.</p><a class="btn" href="#/" style="max-width:220px;margin:14px auto 0">Về danh sách</a></div>';
-    var c = tinh(it);
+    if (!it) return khongThay();
+    var c = tinh(it), t = thieu(it, c);
     tab = tab || "so";
     var h = '<div class="screen">';
     h += '<div class="seg" role="tablist">' +
-      ["so,Số liệu", "kb,Kịch bản", "pr,Prompt"].map(function (x) {
-        var k = x.split(",")[0], t = x.split(",")[1];
-        return '<button type="button" role="tab" aria-selected="' + (tab === k) + '" data-tab="' + k + '" data-id="' + esc(id) + '">' + t + "</button>";
+      [["so", "Số liệu"], ["kb", "Kịch bản"], ["pr", "Prompt"]].map(function (x) {
+        return '<button type="button" role="tab" aria-selected="' + (tab === x[0]) + '" data-tab="' + x[0] + '" data-id="' + esc(id) + '">' + x[1] + "</button>";
       }).join("") + "</div>";
 
     if (tab === "so") {
       h += stripHTML(c) + scoreHTML(c);
+      h += thieuHTML(t, id, true) + thieuHTML(t, id, false);
       h += '<div class="card"><h2>Chi tiết</h2><div class="rows">' +
-        [["Loại hình", c.loai], ["Khu vực", c.khu],
+        [["Trạng thái", c.trang.ten], ["Loại hình", c.loai], ["Khu vực", c.khu || "—"],
          ["Diện tích", c.dt > 0 ? f0(c.dt) + " m²" : "—"],
-         ["Kết cấu", (c.tang || "—") + " tầng · " + (c.pn || "—") + " PN · hướng " + c.huong],
+         ["Kết cấu", [c.tang > 0 ? c.tang + " tầng" : "", c.pn > 0 ? c.pn + " PN" : "", "hướng " + c.huong].filter(Boolean).join(" · ")],
          ["Pháp lý", c.pl.ten],
          ["Giá BGĐ NQ87", c.bgd > 0 ? f1(c.bgd) + " tỷ" : "—"],
-         ["Cho thuê", c.thue > 0 ? f0(c.thue) + " tr/tháng" : "—"],
+         ["Cho thuê", c.coThue ? f0(c.thue) + " tr/tháng" : "—"],
          ["Khách mục tiêu", c.kh.ten],
          ["Cập nhật", ngay(it.sua) + " " + gio(it.sua)]
-        ].map(function (x) {
-          return '<div class="row"><span>' + esc(x[0]) + "</span><b>" + esc(x[1]) + "</b></div>";
-        }).join("") + "</div>" +
-        (it.ghichu ? '<p class="hint" style="margin-top:12px;white-space:pre-wrap">' + esc(it.ghichu) + "</p>" : "") +
-        "</div>";
+        ].map(function (x) { return '<div class="row"><span>' + esc(x[0]) + "</span><b>" + esc(x[1]) + "</b></div>"; }).join("") +
+        "</div>" +
+        (it.ghichu ? '<p class="hint" style="margin-top:12px;white-space:pre-wrap">' + esc(it.ghichu) + "</p>" : "") + "</div>";
       h += '<div class="btn-row">' +
         '<a class="btn alt" href="#/sua/' + esc(id) + '">Sửa</a>' +
         '<button class="btn alt" type="button" data-nhanban="' + esc(id) + '">Nhân bản</button></div>';
@@ -525,6 +630,7 @@
     }
 
     if (tab === "kb") {
+      if (t.chan.length) return h + thieuHTML(t, id, true) + "</div>";
       h += '<div class="card"><h2>' + esc(c.dang.ten) + "</h2>" +
         '<p class="hint">' + esc(c.nt.ten + " · " + c.nt.res + " · " + c.nt.ar + " · " + c.nt.sec + " giây · pipeline " + c.dang.pipeline) + "</p>";
       if (c.dang.mode === "brief") {
@@ -538,17 +644,21 @@
         }).join("");
       }
       h += "</div>";
-      h += '<div class="card"><h2>5 tiêu đề hook</h2><ol class="hooks">' +
+      h += '<div class="card"><h2>Tiêu đề hook</h2><ol class="hooks">' +
         hooks(c).map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ol></div>";
       h += '<div class="card"><h2>Hashtag</h2><p class="tags">' + esc(tags(c)) + "</p></div>";
-      h += '<button class="btn" type="button" data-copy-kb="' + esc(id) + '">Copy toàn bộ kịch bản</button>';
+      h += thieuHTML(t, id, false);
+      h += '<div class="btn-row"><button class="btn" type="button" data-copy-kb="' + esc(id) + '">Copy kịch bản</button>' +
+        '<button class="btn alt" type="button" data-share-kb="' + esc(id) + '">Chia sẻ</button></div>';
     }
 
     if (tab === "pr") {
+      if (t.chan.length) return h + thieuHTML(t, id, true) + "</div>";
       h += '<div class="card"><h2>Prompt cho OpenMontage</h2>' +
         '<p class="hint">Mở Claude Code trong thư mục OpenMontage trên laptop rồi dán nguyên khối này. Màu, font, giọng đọc và số liệu đã khóa theo Brand Guideline.</p>' +
         "<pre>" + esc(promptText(c)) + "</pre>" +
-        '<button class="btn" type="button" data-copy-pr="' + esc(id) + '">Copy prompt</button></div>';
+        '<div class="btn-row"><button class="btn" type="button" data-copy-pr="' + esc(id) + '">Copy prompt</button>' +
+        '<button class="btn alt" type="button" data-share-pr="' + esc(id) + '">Chia sẻ</button></div></div>';
       var paid = c.loaiVideo === "cinematic";
       var cost = paid
         ? [["Sinh video AI (fal.ai — Veo, Kling)", "0,50 – 1,20 USD"], ["Giọng đọc — Piper TTS", "0 USD"],
@@ -562,24 +672,34 @@
     return h + "</div>";
   }
 
+  /* ============ màn hình: form ============ */
   function vForm(id) {
-    var it, them = !id;
+    var it, them = !id, coNhap = false;
     if (them) {
       it = moi();
-      if (DB.cai.nhap) { try { it = Object.assign(it, JSON.parse(DB.cai.nhap)); } catch (e) { /* nháp lỗi, bỏ */ } }
+      if (DB.cai.nhap) {
+        try { it = Object.assign(it, JSON.parse(DB.cai.nhap)); coNhap = true; } catch (e) { /* nháp hỏng, bỏ */ }
+      }
     } else {
       it = tim(id);
-      if (!it) return '<div class="card empty"><h2>Không tìm thấy tài sản</h2><a class="btn" href="#/" style="max-width:220px;margin:14px auto 0">Về danh sách</a></div>';
+      if (!it) return khongThay();
     }
     var h = '<div class="screen" id="form" data-id="' + esc(them ? "" : id) + '">';
-    if (them) h += '<p class="hint">Điền được tới đâu lưu tới đó. Chỉ cần địa chỉ là lưu được, số liệu bổ sung sau.</p>';
-    else h += '<p class="saved" id="saved">Tự lưu mỗi khi anh sửa</p>';
+    if (them) {
+      h += coNhap
+        ? '<div class="card canh-bao"><h2>Đang khôi phục bản nháp</h2><p class="hint">Đây là những gì anh điền dở lần trước. Muốn làm mới thì bấm nút dưới.</p><button class="btn alt" type="button" id="xoa-nhap">Bắt đầu trắng</button></div>'
+        : '<p class="hint">Điền được tới đâu lưu tới đó. Chỉ cần địa chỉ là lưu được, số liệu bổ sung sau.</p>';
+    } else {
+      h += '<p class="saved" id="saved">Tự lưu mỗi khi anh sửa</p>';
+    }
     h += formHTML(it);
-    if (them) h += '<button class="btn" type="button" id="luu-moi">Lưu tài sản</button>';
-    else h += '<a class="btn alt" href="#/ts/' + esc(id) + '">Xong</a>';
+    h += them
+      ? '<button class="btn" type="button" id="luu-moi">Lưu tài sản</button>'
+      : '<a class="btn alt" href="#/ts/' + esc(id) + '">Xong</a>';
     return h + "</div>";
   }
 
+  /* ============ màn hình: vận hành ============ */
   function vVanHanh() {
     var pipes = [
       ["<b>Bán 1 căn cụ thể</b><br>có địa chỉ, giá, MoS", "animated-explainer", "Ảnh anh tự chụp + Piper TTS — miễn phí"],
@@ -591,9 +711,9 @@
       ["<b>Quay màn hình</b><br>hướng dẫn tra BGĐ, tính MoS", "screen-demo", "Bản ghi màn hình. Miễn phí"]
     ];
     var buoc = [
-      'Cài <b>Python 3.10+</b>, <b>Node.js 18+</b>, <b>FFmpeg</b>. Chưa có FFmpeg: <code>winget install Gyan.FFmpeg</code>',
-      'Clone repo: <code>git clone ' + REPO + '.git</code>',
-      'PowerShell: <code>py -3 -m venv .venv</code> → <code>.\\.venv\\Scripts\\Activate.ps1</code> → <code>pip install -r requirements.txt</code> → <code>cd remotion-composer; npx --yes npm install</code> → <code>pip install piper-tts</code>',
+      "Cài <b>Python 3.10+</b>, <b>Node.js 18+</b>, <b>FFmpeg</b>. Chưa có FFmpeg: <code>winget install Gyan.FFmpeg</code>",
+      "Clone repo: <code>git clone " + REPO + ".git</code>",
+      "PowerShell: <code>py -3 -m venv .venv</code> → <code>.\\.venv\\Scripts\\Activate.ps1</code> → <code>pip install -r requirements.txt</code> → <code>cd remotion-composer; npx --yes npm install</code> → <code>pip install piper-tts</code>",
       'Tải <a href="' + YAML_URL + '" download>checkinbds-brand.yaml</a> rồi copy vào thư mục <code>styles/</code> của repo.',
       "Mở Claude Code tại thư mục đó, dán prompt từ tab Prompt của từng tài sản. Agent dừng hỏi anh duyệt ở: đề xuất → kịch bản → cảnh → asset → render."
     ];
@@ -608,37 +728,40 @@
       '</div><p class="hint" style="margin-top:12px">Laptop i5-8265U 8GB không GPU: chạy được nhánh miễn phí (Piper TTS + ảnh + Remotion + FFmpeg), render 60 giây khoảng 20–40 phút. Sinh video local cần GPU — thay bằng API key.</p></div>' +
 
       '<div class="card"><h2>Thương hiệu đã khóa</h2><div class="rows">' +
-      [["Đỏ đô 60%", "#8B0E1A"], ["Vàng đồng 30%", "#D4A017"], ["Trắng 10%", "#FFFFFF"],
-       ["Nền phụ kem", "#FDF4E7"], ["Tiêu đề", "Montserrat Bold HOA"], ["Số liệu", "Montserrat 800 vàng đồng"],
+      [["Đỏ đô 60%", "#8B0E1A"], ["Vàng đồng 30%", "#D4A017"], ["Trắng 10%", "#FFFFFF"], ["Nền phụ kem", "#FDF4E7"],
+       ["Tiêu đề", "Montserrat Bold HOA"], ["Số liệu", "Montserrat 800 vàng đồng"],
        ["Phụ đề", "Word-level, viền đỏ đô"], ["Cảnh cuối", "Tagline + 0983.221911"]
       ].map(function (x) { return '<div class="row"><span>' + esc(x[0]) + "</span><b>" + esc(x[1]) + "</b></div>"; }).join("") +
       '</div><p class="hint" style="margin-top:12px">Số liệu để vàng đồng trên nền đỏ đô theo guideline. Trên nền trắng chuyển sang đỏ đô vì vàng đồng trên trắng đọc không nổi — vẫn trong bộ màu chính thức.</p></div>' +
 
-      '<div class="card"><h2>Công thức dùng trong app</h2><div class="rows">' +
+      '<div class="card"><h2>Công thức dùng trong app</h2><div class="rows ct">' +
       [["MoS", "(Giá TT − Giá mua) / Giá TT × 100%"],
        ["Ngưỡng MoS", "≥20% tốt · 15–20% TB · <15% đàm phán"],
        ["Lợi suất thuê", "(Thuê × 12) / Giá bán × 100%"],
        ["Hoàn vốn thuê", "Giá bán / (Thuê × 12)"],
-       ["Scorecard", "MoS 30 · Pháp lý 20 · Dòng tiền 20 · Vị trí 15 · Tiện ích 15"]
-      ].map(function (x) { return '<div class="row" style="grid-template-columns:auto 1fr;gap:12px"><b style="white-space:nowrap">' + esc(x[0]) + "</b><span style=\"text-align:right\">" + esc(x[1]) + "</span></div>"; }).join("") +
+       ["Scorecard", "MoS 30 · Pháp lý 20 · Dòng tiền 20 · Vị trí 15 · Tiện ích 15"],
+       ["Chưa có giá thuê", "Bỏ mục dòng tiền, quy đổi từ thang 80"]
+      ].map(function (x) { return '<div class="row"><b>' + esc(x[0]) + "</b><span>" + esc(x[1]) + "</span></div>"; }).join("") +
       "</div></div>" +
       '<p class="hint" style="text-align:center">Trần Văn Dũng · 0983.221911 · Check in BDS</p></div>';
   }
 
+  /* ============ màn hình: sao lưu ============ */
   function vSaoLuu() {
     var size = 0;
     try { size = (localStorage.getItem(KEY) || "").length; } catch (e) { /* bỏ qua */ }
+    var lan = DB.cai.luuLan;
     return '<div class="screen">' +
-      '<div class="card"><h2>Dữ liệu của anh</h2>' +
-      '<div class="rows">' +
+      '<div class="card"><h2>Dữ liệu của anh</h2><div class="rows">' +
       '<div class="row"><span>Số tài sản</span><b>' + DB.items.length + "</b></div>" +
       '<div class="row"><span>Dung lượng</span><b>' + (size / 1024).toFixed(1) + " KB</b></div>" +
-      '<div class="row"><span>Nơi lưu</span><b>Máy này</b></div>' +
-      "</div>" +
+      '<div class="row"><span>Sao lưu gần nhất</span><b>' + (lan ? ngay(lan) : "Chưa bao giờ") + "</b></div>" +
+      '<div class="row"><span>Nơi lưu</span><b>Máy này</b></div></div>' +
       '<p class="hint" style="margin-top:12px">Dữ liệu nằm trong trình duyệt của máy này, không gửi lên mạng. Đổi điện thoại, xoá dữ liệu trình duyệt hoặc dùng tab ẩn danh là mất — nên tải file sao lưu định kỳ.</p></div>' +
 
       '<div class="card"><h2>Tải về / mang sang máy khác</h2>' +
       '<button class="btn" type="button" id="tai">Tải file sao lưu (.json)</button>' +
+      '<button class="btn alt" type="button" id="share-json">Gửi qua Zalo / email</button>' +
       '<button class="btn alt" type="button" id="copy-json">Copy dữ liệu dạng chữ</button></div>' +
 
       '<div class="card"><h2>Nhập lại từ file</h2>' +
@@ -647,8 +770,7 @@
 
       '<div class="card"><h2>Xoá sạch</h2>' +
       '<p class="hint">Xoá toàn bộ tài sản trong máy này. Không lấy lại được — tải file sao lưu trước đã.</p>' +
-      '<button class="btn rui" type="button" id="xoa-het">Xoá toàn bộ dữ liệu</button></div>' +
-      "</div>";
+      '<button class="btn rui" type="button" id="xoa-het">Xoá toàn bộ dữ liệu</button></div></div>';
   }
 
   /* ============ điều hướng ============ */
@@ -664,19 +786,14 @@
     return { t: "ds" };
   }
 
-  var TIEU = {
-    ds: ["Check in BDS Video Studio", "Minh bạch · Toàn diện · Hỗ trợ 24/7"],
-    moi: ["Thêm tài sản", "Điền được tới đâu lưu tới đó"],
-    vh: ["Vận hành", "Pipeline · cài đặt · công thức"],
-    luu: ["Sao lưu", "Dữ liệu nằm trong máy anh"]
-  };
+  var cuonDS = 0;
 
   function ve() {
     var r = route(), app = $("app"), html, tieu, sub;
-    if (r.t === "ds") { html = vDanhSach(); tieu = TIEU.ds[0]; sub = TIEU.ds[1]; }
-    else if (r.t === "moi") { html = vForm(null); tieu = TIEU.moi[0]; sub = TIEU.moi[1]; }
-    else if (r.t === "vh") { html = vVanHanh(); tieu = TIEU.vh[0]; sub = TIEU.vh[1]; }
-    else if (r.t === "luu") { html = vSaoLuu(); tieu = TIEU.luu[0]; sub = TIEU.luu[1]; }
+    if (r.t === "ds") { html = vDanhSach(); tieu = "Check in BDS Video Studio"; sub = "Minh bạch · Toàn diện · Hỗ trợ 24/7"; }
+    else if (r.t === "moi") { html = vForm(null); tieu = "Thêm tài sản"; sub = "Điền được tới đâu lưu tới đó"; }
+    else if (r.t === "vh") { html = vVanHanh(); tieu = "Vận hành"; sub = "Pipeline · cài đặt · công thức"; }
+    else if (r.t === "luu") { html = vSaoLuu(); tieu = "Sao lưu"; sub = "Dữ liệu nằm trong máy anh"; }
     else if (r.t === "sua") {
       var its = tim(r.id);
       html = vForm(r.id); tieu = "Sửa tài sản"; sub = its ? (its.dc || "Tài sản") : "";
@@ -684,7 +801,7 @@
       var itd = tim(r.id), cd = itd ? tinh(itd) : null;
       html = vChiTiet(r.id, r.tab);
       tieu = cd ? cd.dc : "Tài sản";
-      sub = cd ? (cd.khu + " · " + cd.loai + (cd.duLieu ? " · MoS " + f1(cd.mos) + "%" : "")) : "";
+      sub = cd ? [cd.khu, cd.loai, cd.coGia ? "MoS " + f1(cd.mos) + "%" : ""].filter(Boolean).join(" · ") : "";
     }
     $("bar-title").textContent = tieu;
     $("bar-sub").textContent = sub;
@@ -696,14 +813,21 @@
         (k === "/vh" && r.t === "vh") || (k === "/luu" && r.t === "luu");
       if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
-    window.scrollTo(0, 0);
-    if (r.t === "sua" || r.t === "moi") gan(r.t === "sua" ? r.id : null);
-    if (r.t === "ds") ganDanhSach();
-    if (r.t === "luu") ganSaoLuu();
+
+    if (r.t === "ds") {
+      ganDanhSach();
+      var y = cuonDS;
+      requestAnimationFrame(function () { window.scrollTo(0, y); });
+    } else {
+      window.scrollTo(0, 0);
+      if (r.t === "sua" || r.t === "moi") gan(r.t === "sua" ? r.id : null);
+      if (r.t === "luu") ganSaoLuu();
+    }
   }
 
   /* ============ gắn sự kiện ============ */
-  var hen = null;
+  var hen = null, henNhap = null;
+
   function gan(id) {
     var form = $("form");
     if (!form) return;
@@ -724,9 +848,13 @@
         var nhap = {};
         Array.prototype.forEach.call(form.querySelectorAll("[data-k]"), function (el) { nhap[el.getAttribute("data-k")] = el.value; });
         DB.cai.nhap = JSON.stringify(nhap);
-        clearTimeout(hen);
-        hen = setTimeout(ghi, 400);
+        clearTimeout(henNhap);
+        henNhap = setTimeout(ghi, 400);
       }
+    });
+    var xn = $("xoa-nhap");
+    if (xn) xn.addEventListener("click", function () {
+      delete DB.cai.nhap; ghi(); ve(); toast("Đã làm mới form");
     });
     var btn = $("luu-moi");
     if (btn) btn.addEventListener("click", function () {
@@ -737,42 +865,61 @@
       delete DB.cai.nhap;
       ghi();
       toast("Đã lưu <b>" + esc(it.dc) + "</b>");
+      cuonDS = 0;
       location.hash = "#/ts/" + it.id;
     });
   }
 
+  function veThanDS() {
+    var box = $("ds-body");
+    if (box) box.innerHTML = thanDS();
+  }
+
   function ganDanhSach() {
-    var q = $("q"), sx = $("sx");
+    var q = $("q"), sx = $("sx"), loc = $("loc");
     if (q) q.addEventListener("input", function () {
       DB.cai.q = q.value;
       clearTimeout(hen);
-      hen = setTimeout(function () {
-        ghi();
-        var pos = q.selectionStart;
-        ve();
-        var q2 = $("q");
-        if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (e) { /* bỏ qua */ } }
-      }, 260);
+      hen = setTimeout(function () { ghi(); veThanDS(); }, 200);
     });
-    if (sx) sx.addEventListener("change", function () { DB.cai.sx = sx.value; ghi(); ve(); });
+    if (sx) sx.addEventListener("change", function () { DB.cai.sx = sx.value; ghi(); veThanDS(); });
+    if (loc) loc.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-loc]");
+      if (!b) return;
+      DB.cai.loc = b.getAttribute("data-loc");
+      ghi();
+      Array.prototype.forEach.call(loc.querySelectorAll("button"), function (x) {
+        x.setAttribute("aria-selected", x === b ? "true" : "false");
+      });
+      cuonDS = 0;
+      veThanDS();
+    });
   }
 
   function ganSaoLuu() {
+    var duLieu = function () { return JSON.stringify({ v: 2, xuat: new Date().toISOString(), items: DB.items }, null, 2); };
+    var danhDau = function () { DB.cai.luuLan = Date.now(); ghi(); };
+
     var tai = $("tai");
     if (tai) tai.addEventListener("click", function () {
-      var txt = JSON.stringify({ v: 1, xuat: new Date().toISOString(), items: DB.items }, null, 2);
-      var blob = new Blob([txt], { type: "application/json" });
+      var blob = new Blob([duLieu()], { type: "application/json" });
       var a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = "checkinbds-taisan-" + new Date().toISOString().slice(0, 10) + ".json";
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      danhDau();
       toast("Đã tải file sao lưu");
+      ve();
+    });
+    var sj = $("share-json");
+    if (sj) sj.addEventListener("click", function () {
+      chiaSe("Sao lưu tài sản Check in BDS", duLieu(), "dữ liệu");
+      danhDau();
     });
     var cj = $("copy-json");
-    if (cj) cj.addEventListener("click", function () {
-      copy(JSON.stringify({ v: 1, items: DB.items }), "dữ liệu");
-    });
+    if (cj) cj.addEventListener("click", function () { copy(duLieu(), "dữ liệu"); danhDau(); });
+
     var file = $("file");
     if (file) file.addEventListener("change", function () {
       var f = file.files && file.files[0];
@@ -787,6 +934,7 @@
           ds.forEach(function (x) {
             if (!x || typeof x !== "object") return;
             x.id = uid(); x.sua = x.sua || Date.now(); x.tao = x.tao || Date.now();
+            if (!x.tt_trang) x.tt_trang = "theo";
             DB.items.unshift(x); them++;
           });
           ghi();
@@ -796,12 +944,17 @@
       };
       fr.readAsText(f);
     });
+
     var xh = $("xoa-het");
     if (xh) {
       var lan = 0;
       xh.addEventListener("click", function () {
         lan++;
-        if (lan === 1) { xh.textContent = "Chạm lần nữa để xoá thật"; setTimeout(function () { lan = 0; xh.textContent = "Xoá toàn bộ dữ liệu"; }, 4000); return; }
+        if (lan === 1) {
+          xh.textContent = "Chạm lần nữa để xoá thật";
+          setTimeout(function () { lan = 0; if (xh.isConnected) xh.textContent = "Xoá toàn bộ dữ liệu"; }, 4000);
+          return;
+        }
         DB.items = []; DB.cai = {}; ghi();
         toast("Đã xoá toàn bộ dữ liệu");
         location.hash = "#/";
@@ -810,24 +963,21 @@
     }
   }
 
-  /* hành động chung trong #app */
+  /* hành động chung */
   document.addEventListener("click", function (e) {
-    var t = e.target.closest ? e.target.closest("[data-tab],[data-xoa],[data-nhanban],[data-copy-kb],[data-copy-pr]") : null;
+    var t = e.target.closest ? e.target.closest("[data-tab],[data-xoa],[data-nhanban],[data-copy-kb],[data-copy-pr],[data-share-kb],[data-share-pr]") : null;
     if (!t) return;
+
     if (t.hasAttribute("data-tab")) {
       location.hash = "#/ts/" + t.getAttribute("data-id") + "/" + t.getAttribute("data-tab");
       return;
     }
-    if (t.hasAttribute("data-copy-kb")) {
-      var i1 = tim(t.getAttribute("data-copy-kb"));
-      if (i1) copy(kichBanText(tinh(i1)), "kịch bản");
-      return;
-    }
-    if (t.hasAttribute("data-copy-pr")) {
-      var i2 = tim(t.getAttribute("data-copy-pr"));
-      if (i2) copy(promptText(tinh(i2)), "prompt");
-      return;
-    }
+    var lay = function (at) { var i = tim(t.getAttribute(at)); return i ? tinh(i) : null; };
+    if (t.hasAttribute("data-copy-kb")) { var a1 = lay("data-copy-kb"); if (a1) copy(kichBanText(a1), "kịch bản"); return; }
+    if (t.hasAttribute("data-copy-pr")) { var a2 = lay("data-copy-pr"); if (a2) copy(promptText(a2), "prompt"); return; }
+    if (t.hasAttribute("data-share-kb")) { var a3 = lay("data-share-kb"); if (a3) chiaSe("Kịch bản — " + a3.dc, kichBanText(a3), "kịch bản"); return; }
+    if (t.hasAttribute("data-share-pr")) { var a4 = lay("data-share-pr"); if (a4) chiaSe("Prompt — " + a4.dc, promptText(a4), "prompt"); return; }
+
     if (t.hasAttribute("data-nhanban")) {
       var i3 = tim(t.getAttribute("data-nhanban"));
       if (!i3) return;
@@ -839,6 +989,7 @@
       location.hash = "#/ts/" + ban.id;
       return;
     }
+
     if (t.hasAttribute("data-xoa")) {
       var id = t.getAttribute("data-xoa");
       if (t.getAttribute("data-sure") !== "1") {
@@ -848,14 +999,13 @@
         return;
       }
       var xoa = tim(id);
+      var luu = xoa ? JSON.parse(JSON.stringify(xoa)) : null;
       DB.items = DB.items.filter(function (x) { return x.id !== id; });
       ghi();
-      var luu = xoa ? JSON.parse(JSON.stringify(xoa)) : null;
       toast("Đã xoá <b>" + esc(luu ? (luu.dc || "tài sản") : "tài sản") + "</b>", 6, luu ? {
         nhan: "Hoàn tác", lam: function () { DB.items.unshift(luu); ghi(); toast("Đã phục hồi"); ve(); }
       } : null);
-      location.hash = "#/";
-      ve();
+      if (location.hash.indexOf("#/ts/") === 0) location.hash = "#/"; else ve();
     }
   });
 
@@ -864,6 +1014,9 @@
   });
 
   window.addEventListener("hashchange", ve);
+  window.addEventListener("scroll", function () {
+    if (route().t === "ds") cuonDS = window.scrollY || 0;
+  }, { passive: true });
 
   /* ============ PWA ============ */
   if ("serviceWorker" in navigator) {
@@ -892,16 +1045,28 @@
     caiDat = e;
     if (DB.cai.anCai) return;
     toast("Cài lên màn hình chính?", 0, {
-      nhan: "Cài", lam: function () {
-        caiDat.prompt();
-        DB.cai.anCai = 1; ghi();
-      }
+      nhan: "Cài", lam: function () { caiDat.prompt(); DB.cai.anCai = 1; ghi(); }
     });
   });
+
+  /* ============ nhắc sao lưu ============ */
+  function nhacSaoLuu() {
+    if (DB.items.length < 3) return;
+    var nay = Date.now(), ngayMs = 86400000;
+    if (DB.cai.nhacLan && nay - DB.cai.nhacLan < ngayMs) return;
+    if (DB.cai.luuLan && nay - DB.cai.luuLan < NGAY_NHAC_SAO_LUU * ngayMs) return;
+    DB.cai.nhacLan = nay; ghi();
+    setTimeout(function () {
+      toast("Lâu rồi chưa sao lưu — mất máy là mất hết", 0, {
+        nhan: "Sao lưu", lam: function () { location.hash = "#/luu"; }
+      });
+    }, 1200);
+  }
 
   /* ============ chạy ============ */
   doc();
   ve();
+  nhacSaoLuu();
   if (!DB.cai.anCai && /iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone) {
     setTimeout(function () {
       toast("Chạm <b>Chia sẻ</b> → <b>Thêm vào MH chính</b> để dùng như app", 0, {
