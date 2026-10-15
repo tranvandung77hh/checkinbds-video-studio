@@ -1,6 +1,6 @@
 /* Service worker — cho app chạy được khi mất mạng.
    Đổi PHIEN mỗi lần sửa app để máy khách tự nhận bản mới. */
-var PHIEN = "cibds-v2";
+var PHIEN = "cibds-v3";
 var FONT = "cibds-font-v1";
 var VO = [
   "./",
@@ -14,6 +14,7 @@ var VO = [
 ];
 
 self.addEventListener("install", function (e) {
+  self.skipWaiting();   // bản mới nhận quyền ngay, app tự nạp lại nếu anh không đang gõ
   e.waitUntil(
     caches.open(PHIEN).then(function (c) {
       return Promise.all(VO.map(function (u) {

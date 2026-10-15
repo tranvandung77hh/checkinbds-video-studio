@@ -1019,22 +1019,28 @@
   }, { passive: true });
 
   /* ============ PWA ============ */
+  function dangGo() {
+    var e = document.activeElement;
+    return !!e && /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName);
+  }
+
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("sw.js").then(function (reg) {
-        reg.addEventListener("updatefound", function () {
-          var sw = reg.installing;
-          if (!sw) return;
-          sw.addEventListener("statechange", function () {
-            if (sw.state === "installed" && navigator.serviceWorker.controller) {
-              toast("Có bản mới", 0, { nhan: "Cập nhật", lam: function () { sw.postMessage("skip"); } });
-            }
-          });
-        });
-      }).catch(function () { /* không có SW cũng chạy bình thường */ });
+      navigator.serviceWorker.register("sw.js").catch(function () { /* không có SW cũng chạy bình thường */ });
+
       var daReload = false;
+      var napLai = function () {
+        if (daReload) return;
+        daReload = true;
+        location.reload();
+      };
       navigator.serviceWorker.addEventListener("controllerchange", function () {
-        if (daReload) return; daReload = true; location.reload();
+        // Bản mới đã nhận quyền. Anh đang gõ thì để anh gõ xong, không giật màn hình.
+        if (dangGo()) {
+          toast("Đã có bản mới", 0, { nhan: "Dùng ngay", lam: napLai });
+        } else {
+          napLai();
+        }
       });
     });
   }
