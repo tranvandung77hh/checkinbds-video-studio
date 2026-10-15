@@ -1,6 +1,6 @@
 /* Service worker — cho app chạy được khi mất mạng.
    Đổi PHIEN mỗi lần sửa app để máy khách tự nhận bản mới. */
-var PHIEN = "cibds-v3";
+var PHIEN = "cibds-v4";
 var FONT = "cibds-font-v1";
 var VO = [
   "./",

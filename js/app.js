@@ -116,8 +116,10 @@
       if (raw) {
         var d = JSON.parse(raw);
         if (d && Array.isArray(d.items)) {
+          var canNangCap = d.v !== 2;
           d.items.forEach(function (it) { if (!it.tt_trang) it.tt_trang = "theo"; });
           DB = { v: 2, items: d.items, cai: d.cai || {} };
+          if (canNangCap) ghi();   // ghi lại 1 lần để dữ liệu cũ có đủ trường mới
           return;
         }
       }
