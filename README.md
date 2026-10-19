@@ -1,8 +1,27 @@
 # Check in BDS Video Studio
 
-App web cho điện thoại: quản lý danh sách tài sản, tính **biên an toàn MoS**, sinh **kịch bản video** và **prompt OpenMontage** chuẩn thương hiệu Check in BDS.
+App web cho điện thoại: quản lý danh sách tài sản, tính **biên an toàn MoS**, **dựng video ngay trên điện thoại** từ ảnh tài sản, soạn bài đăng, và sinh **prompt OpenMontage** chuẩn thương hiệu Check in BDS.
 
 **Dùng ngay:** https://tranvandung77hh.github.io/checkinbds-video-studio/
+
+Thanh dưới đáy: **Tài sản · Thêm · Video · Cài đặt**.
+
+## Tab Video — dựng video trên điện thoại
+
+Vẽ từng khung lên canvas rồi ghi thành video bằng MediaRecorder. Không cần máy chủ, không tốn API.
+
+- **Xem thử tức thì** — mỗi thay đổi hiện ngay trên khung xem, không phải xuất mới biết.
+- **3 phương án nhanh** — Sang trọng (4,5 giây/ảnh, zoom, mờ dần) · Nhanh — TikTok (2 giây/ảnh, lia, cắt thẳng, chữ to) · Tối giản (ảnh đứng yên, ít chữ).
+- **Dòng thời gian** — sửa câu mở đầu, sửa chữ từng ảnh, đổi thứ tự ▲▼, bỏ ảnh / thêm lại, bật tắt bảng MoS và cảnh cuối.
+- **Chuyển động** zoom chậm / lia ngang / đứng yên · **chuyển cảnh** mờ dần / cắt thẳng / trượt · **nhịp** 1,5–6 giây mỗi ảnh.
+- **Chữ** cỡ nhỏ/vừa/lớn, vị trí trên/giữa/dưới, logo + số điện thoại góc trên.
+- **Khung** dọc 9:16 (TikTok, Reels) · vuông 1:1 (Facebook) · ngang 16:9 (YouTube) · **chất lượng** 1080p hoặc 720p.
+- **Âm thanh** — gắn giọng đọc hoặc nhạc từ máy, chỉnh âm lượng, tự nhỏ dần 1 giây cuối.
+- **Xuất video** MP4 H.264 (iPhone và Chrome mới), lưu thành từng phiên bản.
+- **Đã lưu** — xem lại, đánh dấu ★ bản ưng ý, gửi thẳng sang TikTok/Zalo (chú thích tự copy sẵn), tải file, dựng lại từ một bản cũ, xoá các bản chưa ưng ý.
+- **Bài đăng** — bài Facebook đủ khối (tiêu đề, thông tin, phân tích giá, CTA, miễn trừ, hashtag) và chú thích TikTok ngắn; sửa tới đâu tự lưu tới đó. Chỉ dùng số liệu anh đã nhập, **không bao giờ đưa ghi chú riêng vào bài**.
+
+Cảnh trong video: câu mở đầu vàng đồng trên ảnh bìa → ảnh có chữ → bảng MoS (số đếm lên, có dòng miễn trừ) → cảnh cuối đỏ đô với số điện thoại và tagline.
 
 ## Làm được gì
 
@@ -30,7 +49,7 @@ App web cho điện thoại: quản lý danh sách tài sản, tính **biên an 
 
 ## Dữ liệu nằm ở đâu
 
-Số liệu trong `localStorage`, ảnh trong `IndexedDB` của trình duyệt trên máy đang dùng. **Không gửi lên mạng, không có server, không ai khác đọc được.** Đổi máy, xoá dữ liệu trình duyệt hoặc dùng tab ẩn danh là mất — dùng mục **Sao lưu** để tải file `.json` định kỳ.
+Số liệu trong `localStorage`, ảnh và video đã xuất trong `IndexedDB` của trình duyệt trên máy đang dùng. **Không gửi lên mạng, không có server, không ai khác đọc được.** Đổi máy, xoá dữ liệu trình duyệt hoặc dùng tab ẩn danh là mất — dùng mục **Sao lưu** để tải file `.json` định kỳ.
 
 ## Dùng với OpenMontage
 
@@ -44,7 +63,8 @@ Số liệu trong `localStorage`, ảnh trong `IndexedDB` của trình duyệt t
 index.html              khung app
 css/app.css             màu, font, layout theo Brand Guideline
 js/anh.js               kho ảnh IndexedDB, xử lý ảnh, đóng/mở gói zip
-js/app.js               dữ liệu, tính toán, sinh kịch bản + prompt
+js/studio.js            phòng dựng video: vẽ khung, xem thử, ghi MP4, bài đăng, phiên bản
+js/app.js               dữ liệu, tính toán, sinh kịch bản + prompt, điều hướng
 sw.js                   chạy offline, tự nhận bản mới
 manifest.webmanifest    cài lên màn hình chính
 icons/                  icon app (skyline + đường sóng, đỏ đô/vàng đồng)
@@ -55,7 +75,7 @@ Không framework, không build. Sửa file rồi push là xong — GitHub Pages 
 
 ## Sửa app
 
-Mỗi lần sửa, tăng số phiên bản ở **3 chỗ** cho khớp nhau: `PHIEN_BAN` trong `js/app.js`, `?v=` trong `index.html`, `PHIEN` và `V` trong `sw.js`. Máy anh sẽ tự nhận bản mới khi mở app hoặc kéo app từ nền lên, không cần bấm gì. Số phiên bản hiện ở cuối danh sách tài sản và trong màn Vận hành.
+Mỗi lần sửa, tăng số phiên bản ở **3 chỗ** cho khớp nhau: `PHIEN_BAN` trong `js/app.js`, `?v=` trong `index.html`, `PHIEN` và `V` trong `sw.js`. Máy anh sẽ tự nhận bản mới khi mở app hoặc kéo app từ nền lên, không cần bấm gì. Số phiên bản hiện ở cuối danh sách tài sản và trong màn Cài đặt.
 
 ---
 

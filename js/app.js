@@ -43,7 +43,7 @@
   var HUONG = ["Đông Nam", "Đông", "Nam", "Tây Nam", "Tây", "Tây Bắc", "Bắc", "Đông Bắc"];
 
   /* Mỗi lần sửa app: tăng PHIEN_BAN ở đây, ?v= trong index.html và PHIEN trong sw.js */
-  var PHIEN_BAN = 6;
+  var PHIEN_BAN = 7;
   var NGAY_BAN = "19/10/2026";
 
   var REPO = "https://github.com/tranvandung77hh/videostudio_OpenMontage";
@@ -632,6 +632,10 @@
 
     if (tab === "so") {
       h += dayAnhHTML(id, "Ảnh tài sản");
+      var soVideo = window.Studio ? Studio.soBan(id) : 0;
+      h += '<a class="btn nut-video" href="#/video/' + esc(id) + '/dung">' +
+        '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M4 5h11a1 1 0 0 1 1 1v3.2l4-2.7v11l-4-2.7V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>' +
+        "<span>Dựng video cho căn này" + (soVideo ? " · " + soVideo + " bản" : "") + "</span></a>";
       h += stripHTML(c) + scoreHTML(c);
       h += thieuHTML(t, id, true) + thieuHTML(t, id, false);
       h += '<div class="card"><h2>Chi tiết</h2><div class="rows">' +
@@ -733,7 +737,7 @@
   /* Ảnh vừa đổi: màn hình lưới thì vẽ lại cả trang, còn lại chỉ vẽ lại dải ảnh để không mất chữ anh đang gõ */
   function lamMoiAnh() {
     var r = route();
-    if ((r.t === "ts" && r.tab === "anh") || r.t === "ds") { ve(); return; }
+    if ((r.t === "ts" && r.tab === "anh") || r.t === "ds" || r.t === "video") { ve(); return; }
     veDayAnh();
   }
 
@@ -941,8 +945,8 @@
     return h + "</div>";
   }
 
-  /* ============ màn hình: vận hành ============ */
-  function vVanHanh() {
+  /* ============ phần hướng dẫn laptop (nằm trong Cài đặt) ============ */
+  function theHuongDan() {
     var pipes = [
       ["<b>Bán 1 căn cụ thể</b><br>có địa chỉ, giá, MoS", "animated-explainer", "Ảnh anh tự chụp + Piper TTS — miễn phí"],
       ["<b>Giáo dục tài chính</b><br>MoS, ROI, so sánh kênh", "animated-explainer", "Chỉ cần số liệu — stat card Remotion"],
@@ -959,32 +963,25 @@
       'Tải <a href="' + YAML_URL + '" download>checkinbds-brand.yaml</a> rồi copy vào thư mục <code>styles/</code> của repo.',
       "Mở Claude Code tại thư mục đó, dán prompt từ tab Prompt của từng tài sản. Agent dừng hỏi anh duyệt ở: đề xuất → kịch bản → cảnh → asset → render."
     ];
-    var daCai = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
-    return '<div class="screen">' +
-      '<div class="card"><h2>Phiên bản app</h2><div class="rows">' +
-      '<div class="row"><span>Đang dùng</span><b>Phiên bản ' + PHIEN_BAN + " · " + NGAY_BAN + "</b></div>" +
-      '<div class="row"><span>Cách mở</span><b>' + (daCai ? "App trên màn hình chính" : "Trong trình duyệt") + "</b></div>" +
-      "</div>" +
-      '<p class="hint" style="margin-top:12px">App tự cập nhật mỗi khi anh mở. Nếu thấy thiếu tính năng mới, bấm <b>Kiểm tra bản mới</b>. Vẫn chưa được thì bấm <b>Làm mới app</b> — chỉ tải lại phần mã, <b>không mất tài sản hay ảnh</b>.</p>' +
-      '<div class="btn-row"><button class="btn" type="button" id="kiem-ban">Kiểm tra bản mới</button>' +
-      '<button class="btn alt" type="button" id="lam-moi">Làm mới app</button></div></div>' +
-      '<div class="card"><h2>Pipeline nào cho việc gì</h2><div class="scroll"><table>' +
+    return '<details class="card mo-rong"><summary><h2>Dựng video chất lượng cao trên laptop — OpenMontage</h2><span>Mở</span></summary>' +
+      '<p class="hint" style="margin-top:10px">Tab Video dựng nhanh ngay trên điện thoại từ ảnh thật. Khi cần giọng đọc AI, nhạc riêng, hiệu ứng điện ảnh thì dùng OpenMontage trên laptop với prompt ở tab Prompt của từng căn.</p>' +
+      '<div class="card-con"><h2>Pipeline nào cho việc gì</h2><div class="scroll"><table>' +
       "<thead><tr><th>Việc của anh</th><th>Pipeline</th><th>Cần gì</th></tr></thead><tbody>" +
       pipes.map(function (p) { return "<tr><td>" + p[0] + "</td><td><code>" + p[1] + "</code></td><td>" + p[2] + "</td></tr>"; }).join("") +
       "</tbody></table></div></div>" +
 
-      '<div class="card"><h2>Chạy lần đầu trên laptop</h2><div class="steps">' +
+      '<div class="card-con"><h2>Chạy lần đầu trên laptop</h2><div class="steps">' +
       buoc.map(function (b, i) { return '<div class="step"><i>' + (i + 1) + "</i><p>" + b + "</p></div>"; }).join("") +
       '</div><p class="hint" style="margin-top:12px">Laptop i5-8265U 8GB không GPU: chạy được nhánh miễn phí (Piper TTS + ảnh + Remotion + FFmpeg), render 60 giây khoảng 20–40 phút. Sinh video local cần GPU — thay bằng API key.</p></div>' +
 
-      '<div class="card"><h2>Thương hiệu đã khóa</h2><div class="rows">' +
+      '<div class="card-con"><h2>Thương hiệu đã khóa</h2><div class="rows">' +
       [["Đỏ đô 60%", "#8B0E1A"], ["Vàng đồng 30%", "#D4A017"], ["Trắng 10%", "#FFFFFF"], ["Nền phụ kem", "#FDF4E7"],
        ["Tiêu đề", "Montserrat Bold HOA"], ["Số liệu", "Montserrat 800 vàng đồng"],
        ["Phụ đề", "Word-level, viền đỏ đô"], ["Cảnh cuối", "Tagline + 0983.221911"]
       ].map(function (x) { return '<div class="row"><span>' + esc(x[0]) + "</span><b>" + esc(x[1]) + "</b></div>"; }).join("") +
       '</div><p class="hint" style="margin-top:12px">Số liệu để vàng đồng trên nền đỏ đô theo guideline. Trên nền trắng chuyển sang đỏ đô vì vàng đồng trên trắng đọc không nổi — vẫn trong bộ màu chính thức.</p></div>' +
 
-      '<div class="card"><h2>Công thức dùng trong app</h2><div class="rows ct">' +
+      '<div class="card-con"><h2>Công thức dùng trong app</h2><div class="rows ct">' +
       [["MoS", "(Giá TT − Giá mua) / Giá TT × 100%"],
        ["Ngưỡng MoS", "≥20% tốt · 15–20% TB · <15% đàm phán"],
        ["Lợi suất thuê", "(Thuê × 12) / Giá bán × 100%"],
@@ -992,8 +989,18 @@
        ["Scorecard", "MoS 30 · Pháp lý 20 · Dòng tiền 20 · Vị trí 15 · Tiện ích 15"],
        ["Chưa có giá thuê", "Bỏ mục dòng tiền, quy đổi từ thang 80"]
       ].map(function (x) { return '<div class="row"><b>' + esc(x[0]) + "</b><span>" + esc(x[1]) + "</span></div>"; }).join("") +
-      "</div></div>" +
-      '<p class="hint" style="text-align:center">Trần Văn Dũng · 0983.221911 · Check in BDS</p></div>';
+      "</div></div></details>";
+  }
+
+  function thePhienBan() {
+    var daCai = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+    return '<div class="card"><h2>Phiên bản app</h2><div class="rows">' +
+      '<div class="row"><span>Đang dùng</span><b>Phiên bản ' + PHIEN_BAN + " · " + NGAY_BAN + "</b></div>" +
+      '<div class="row"><span>Cách mở</span><b>' + (daCai ? "App trên màn hình chính" : "Trong trình duyệt") + "</b></div>" +
+      "</div>" +
+      '<p class="hint" style="margin-top:12px">App tự cập nhật mỗi khi anh mở. Nếu thấy thiếu tính năng mới, bấm <b>Kiểm tra bản mới</b>. Vẫn chưa được thì bấm <b>Làm mới app</b> — chỉ tải lại phần mã, <b>không mất tài sản, ảnh hay video</b>.</p>' +
+      '<div class="btn-row"><button class="btn" type="button" id="kiem-ban">Kiểm tra bản mới</button>' +
+      '<button class="btn alt" type="button" id="lam-moi">Làm mới app</button></div></div>';
   }
 
   /* ============ màn hình: sao lưu ============ */
@@ -1003,10 +1010,14 @@
     var lan = DB.cai.luuLan;
     var soAnh = window.Anh ? Anh.tatCa().length : 0;
     var cuaAnh = window.Anh ? Anh.dungLuong() : 0;
+    var soVideo = window.Studio ? Studio.tatCa().length : 0;
+    var cuaVideo = window.Studio ? Studio.dungLuong() : 0;
     return '<div class="screen">' +
+      thePhienBan() +
       '<div class="card"><h2>Dữ liệu của anh</h2><div class="rows">' +
       '<div class="row"><span>Số tài sản</span><b>' + DB.items.length + "</b></div>" +
       '<div class="row"><span>Ảnh</span><b>' + soAnh + " ảnh · " + mb(cuaAnh) + "</b></div>" +
+      '<div class="row"><span>Video đã xuất</span><b>' + soVideo + " bản · " + mb(cuaVideo) + "</b></div>" +
       '<div class="row"><span>Số liệu</span><b>' + (size / 1024).toFixed(1) + " KB</b></div>" +
       '<div class="row"><span>Máy còn trống</span><b id="con-trong">đang xem…</b></div>' +
       '<div class="row"><span>Sao lưu gần nhất</span><b>' + (lan ? ngay(lan) : "Chưa bao giờ") + "</b></div>" +
@@ -1025,9 +1036,12 @@
       '<p class="hint">Chọn file .zip (có cả ảnh) hoặc .json (chỉ số liệu) đã sao lưu. Tài sản trong file được thêm vào, không ghi đè cái đang có.</p>' +
       '<input type="file" id="file" accept=".json,.zip,application/json,application/zip"></div>' +
 
+      theHuongDan() +
+
       '<div class="card"><h2>Xoá sạch</h2>' +
       '<p class="hint">Xoá toàn bộ tài sản trong máy này. Không lấy lại được — tải file sao lưu trước đã.</p>' +
-      '<button class="btn rui" type="button" id="xoa-het">Xoá toàn bộ dữ liệu</button></div></div>';
+      '<button class="btn rui" type="button" id="xoa-het">Xoá toàn bộ dữ liệu</button></div>' +
+      '<p class="phien">Trần Văn Dũng · 0983.221911 · Check in BDS</p></div>';
   }
 
   /* ============ điều hướng ============ */
@@ -1036,8 +1050,8 @@
     var p = h.split("/").filter(Boolean);
     if (!p.length) return { t: "ds" };
     if (p[0] === "moi") return { t: "moi" };
-    if (p[0] === "vh") return { t: "vh" };
-    if (p[0] === "luu") return { t: "luu" };
+    if (p[0] === "vh" || p[0] === "luu") return { t: "luu" };      // Vận hành cũ đã gộp vào Cài đặt
+    if (p[0] === "video") return { t: "video", id: p[1], sub: p[2] };
     if (p[0] === "sua") return { t: "sua", id: p[1] };
     if (p[0] === "ts") return { t: "ts", id: p[1], tab: p[2] || "so" };
     return { t: "ds" };
@@ -1047,10 +1061,15 @@
 
   function ve() {
     var r = route(), app = $("app"), html, tieu, sub;
+    if (window.Studio) Studio.dung();       // rời màn Video thì dừng khung xem thử
     if (r.t === "ds") { html = vDanhSach(); tieu = "Check in BDS Video Studio"; sub = "Minh bạch · Toàn diện · Hỗ trợ 24/7"; }
     else if (r.t === "moi") { html = vForm(null); tieu = "Thêm tài sản"; sub = "Điền được tới đâu lưu tới đó"; }
-    else if (r.t === "vh") { html = vVanHanh(); tieu = "Vận hành"; sub = "Pipeline · cài đặt · công thức"; }
-    else if (r.t === "luu") { html = vSaoLuu(); tieu = "Sao lưu"; sub = "Dữ liệu nằm trong máy anh"; }
+    else if (r.t === "video") {
+      html = window.Studio ? Studio.man(r) : '<div class="card empty"><h2>Không tải được phòng dựng video</h2></div>';
+      var itv = tim(DB.cai.videoTs);
+      tieu = "Dựng video"; sub = itv ? (itv.dc || "Tài sản") : "Chọn tài sản";
+    }
+    else if (r.t === "luu") { html = vSaoLuu(); tieu = "Cài đặt"; sub = "Phiên bản · sao lưu · hướng dẫn"; }
     else if (r.t === "sua") {
       var its = tim(r.id);
       html = vForm(r.id); tieu = "Sửa tài sản"; sub = its ? (its.dc || "Tài sản") : "";
@@ -1067,7 +1086,7 @@
     Array.prototype.forEach.call(document.querySelectorAll("#tabs a"), function (a) {
       var k = a.getAttribute("data-nav");
       var on = (k === "/" && r.t === "ds") || (k === "/moi" && r.t === "moi") ||
-        (k === "/vh" && r.t === "vh") || (k === "/luu" && r.t === "luu");
+        (k === "/video" && r.t === "video") || (k === "/luu" && r.t === "luu");
       if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
 
@@ -1078,8 +1097,8 @@
     } else {
       window.scrollTo(0, 0);
       if (r.t === "sua" || r.t === "moi") gan(r.t === "sua" ? r.id : null);
-      if (r.t === "luu") ganSaoLuu();
-      if (r.t === "vh") ganVanHanh();
+      if (r.t === "luu") { ganSaoLuu(); ganVanHanh(); }
+      if (r.t === "video" && window.Studio) Studio.gan(r);
     }
     veThumb();
   }
@@ -1447,7 +1466,7 @@
       }));
     }
     return Promise.all(viec).catch(function () {}).then(function () {
-      location.replace(location.pathname + "?lm=" + Date.now() + "#/vh");
+      location.replace(location.pathname + "?lm=" + Date.now() + "#/luu");
     });
   }
 
@@ -1476,6 +1495,17 @@
   }
 
   /* ============ chạy ============ */
+  /* Cho phòng dựng video (js/studio.js) dùng chung dữ liệu và công cụ */
+  var henGhi = null;
+  window.CIB = {
+    items: function () { return DB.items; },
+    cai: function () { return DB.cai; },
+    tim: tim, tinh: tinh, esc: esc, f0: f0, f1: f1, mb: mb, gio: gio, ngay: ngay,
+    tags: tags, toast: toast, copy: copy, chiaSe: chiaSe, taiVe: taiVe, ve: ve,
+    ghi: ghi,
+    ghiHoan: function () { clearTimeout(henGhi); henGhi = setTimeout(ghi, 300); }
+  };
+
   /* ảnh của tài sản đã xoá hẳn thì dọn đi cho nhẹ máy */
   function donAnhMoCoi() {
     if (!window.Anh) return;
@@ -1487,9 +1517,18 @@
 
   doc();
   ve();
-  if (window.Anh) {
-    Anh.nap().then(function () { donAnhMoCoi(); ve(); });
-  }
+  Promise.all([
+    window.Anh ? Anh.nap() : null,
+    window.Studio ? Studio.nap() : null
+  ]).then(function () {
+    donAnhMoCoi();
+    if (window.Studio) {
+      var co = {};
+      DB.items.forEach(function (it) { co[it.id] = 1; });
+      Studio.donMoCoi(co);
+    }
+    ve();
+  });
   nhacSaoLuu();
   if (!DB.cai.anCai && /iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone) {
     setTimeout(function () {
