@@ -1,7 +1,7 @@
 /* Service worker — cho app chạy được khi mất mạng và tự nhận bản mới.
    Mỗi lần sửa app: đổi PHIEN ở đây, ?v= trong index.html và PHIEN_BAN trong js/app.js. */
-var PHIEN = "cibds-v7";
-var V = "?v=7";
+var PHIEN = "cibds-v8";
+var V = "?v=8";
 var FONT = "cibds-font-v1";
 var VO = [
   "./",

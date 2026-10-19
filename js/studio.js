@@ -74,10 +74,12 @@
   function layBan(id) {
     return tx("file", "readonly").then(function (t) { return chay(t.objectStore("file").get(id)); });
   }
-  function luuAm(ts, blob, ten) {
+  function luuAm(ts, blob, ten, them) {
+    var ban = { ts: ts, blob: blob, ten: ten, tao: Date.now() };
+    Object.keys(them || {}).forEach(function (k) { ban[k] = them[k]; });
     return tx("am", "readwrite").then(function (t) {
-      t.objectStore("am").put({ ts: ts, blob: blob, ten: ten, tao: Date.now() });
-      return xong(t);
+      t.objectStore("am").put(ban);
+      return xong(t).then(function () { return ban; });
     });
   }
   function layAm(ts) {
@@ -97,7 +99,7 @@
   var MAC = {
     khung: "doc", chatLuong: "1080", giayAnh: 3.5, chuyenDong: "zoom", chuyenCanh: "mo",
     coPhuDe: true, coSo: true, coCuoi: true, coLogo: true, coChu: "vua", viTri: "duoi",
-    amLuong: 0.8, hook: null, phuDe: {}, anh: null, mau: "sang"
+    amLuong: 0.8, hook: null, phuDe: {}, anh: null, bo: [], mau: "sang"
   };
   var MAU = {
     sang: { ten: "Sang trọng", mo: "Chậm, zoom nhẹ, mờ dần", giayAnh: 4.5, chuyenDong: "zoom", chuyenCanh: "mo", coChu: "vua", viTri: "duoi", coPhuDe: true },
@@ -144,16 +146,23 @@
   }
 
   /* ================= dòng thời gian ================= */
+  /* Thứ tự ảnh trong video.
+     cai.anh = thứ tự anh đã sắp, cai.bo = ảnh anh đã bỏ ra.
+     Ảnh chụp thêm sau này tự vào cuối video; mã ảnh cũ không còn thì tự bỏ qua. */
   function dsAnh(it, cai) {
     var tatCa = global.Anh ? Anh.cua(it.id).map(function (m) { return m.id; }) : [];
+    var co = function (id) { return tatCa.indexOf(id) >= 0; };
+    var bo = (cai.bo || []).filter(co);
+    var conDung = function (id) { return bo.indexOf(id) < 0; };
     var ds;
-    if (Array.isArray(cai.anh)) {
-      ds = cai.anh.filter(function (id) { return tatCa.indexOf(id) >= 0; });
+    if (Array.isArray(cai.anh) && cai.anh.some(co)) {
+      ds = cai.anh.filter(function (id, i, a) { return co(id) && conDung(id) && a.indexOf(id) === i; });
+      tatCa.forEach(function (id) { if (ds.indexOf(id) < 0 && conDung(id)) ds.push(id); });
     } else {
-      ds = tatCa.slice();
+      ds = tatCa.filter(conDung);
       if (it.anhBia && ds.indexOf(it.anhBia) > 0) { ds.splice(ds.indexOf(it.anhBia), 1); ds.unshift(it.anhBia); }
     }
-    return { dung: ds, boRa: tatCa.filter(function (id) { return ds.indexOf(id) < 0; }) };
+    return { dung: ds, boRa: bo };
   }
 
   function keHoach(it, c, cai) {
@@ -177,45 +186,77 @@
     };
   }
 
-  /* ================= ảnh đã giải mã (giữ tối đa 4 tấm trong bộ nhớ) ================= */
-  var BMP = {}, LRU = [];
-  function giaiMa(id) {
-    if (BMP[id]) { LRU = LRU.filter(function (x) { return x !== id; }); LRU.push(id); return BMP[id].p; }
+  /* ================= ảnh đã giải mã =================
+     Xem thử: ảnh thu về 1280px, giữ tối đa 12 tấm — khung xem chạy mượt, tua không giật.
+     Xuất video: ảnh gốc tới 2560px, giữ tối đa 4 tấm — video nét nhất mà không tràn bộ nhớ máy. */
+  var BMP = {}, LRU = { nho: [], goc: [] };
+  var GIU = { nho: 12, goc: 4 }, CANH_NHO = 1280;
+
+  function docAnh(blob) {
+    if (global.createImageBitmap) {
+      return createImageBitmap(blob, { imageOrientation: "from-image" }).catch(function () { return createImageBitmap(blob); });
+    }
+    return new Promise(function (ok) {
+      var img = new Image();
+      img.onload = function () { ok(img); };
+      img.onerror = function () { ok(null); };
+      img.src = URL.createObjectURL(blob);
+    });
+  }
+  function thuNhoAnh(b) {
+    if (!b) return b;
+    var s = Math.min(1, CANH_NHO / Math.max(b.width, b.height));
+    if (s >= 1) return b;
+    var c = document.createElement("canvas");
+    c.width = Math.round(b.width * s); c.height = Math.round(b.height * s);
+    var x = c.getContext("2d");
+    x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
+    x.drawImage(b, 0, 0, c.width, c.height);
+    if (b.close) b.close();
+    return c;
+  }
+  function giaiMa(id, nho) {
+    var loai = nho ? "nho" : "goc", k = id + "|" + loai, ds = LRU[loai];
+    if (BMP[k]) { LRU[loai] = ds.filter(function (x) { return x !== k; }); LRU[loai].push(k); return BMP[k].p; }
     var o = { b: null };
     o.p = Anh.layFile(id).then(function (f) {
       if (!f || !f.goc) return null;
-      if (global.createImageBitmap) {
-        return createImageBitmap(f.goc, { imageOrientation: "from-image" }).catch(function () { return createImageBitmap(f.goc); });
-      }
-      return new Promise(function (ok) {
-        var img = new Image();
-        img.onload = function () { ok(img); };
-        img.onerror = function () { ok(null); };
-        img.src = URL.createObjectURL(f.goc);
-      });
+      return docAnh(f.goc).then(function (b) { return nho ? thuNhoAnh(b) : b; });
     }).then(function (b) { o.b = b; return b; }).catch(function () { return null; });
-    BMP[id] = o;
-    LRU.push(id);
-    while (LRU.length > 4) {
-      var bo = LRU.shift();
+    BMP[k] = o;
+    ds.push(k);
+    while (ds.length > GIU[loai]) {
+      var bo = ds.shift();
       if (BMP[bo] && BMP[bo].b && BMP[bo].b.close) BMP[bo].b.close();
       delete BMP[bo];
     }
     return o.p;
   }
-  function bmp(id) {
+  function bmp(id, nho) {
     if (!id) return null;
-    if (!BMP[id]) giaiMa(id);
-    return BMP[id] ? BMP[id].b : null;
+    var k = id + "|" + (nho ? "nho" : "goc");
+    if (!BMP[k]) giaiMa(id, nho);
+    return BMP[k] ? BMP[k].b : null;
   }
+  /* nạp trước ảnh của các cảnh sắp tới; trả về những ảnh còn đang giải mã */
   function chuanBi(kh, t, xa) {
+    var dangCho = [];
     kh.canh.forEach(function (s) {
-      if (s.anh && s.kt > t && s.bd < t + (xa || 3)) giaiMa(s.anh);
+      if (s.anh && s.kt > t && s.bd < t + (xa || 3)) {
+        var pr = giaiMa(s.anh, kh.nho);
+        var k = s.anh + "|" + (kh.nho ? "nho" : "goc");
+        if (BMP[k] && !BMP[k].b && s.bd <= t) dangCho.push(pr);
+      }
     });
+    return dangCho;
   }
   function choAnhDau(kh) {
-    var can = kh.canh.filter(function (s) { return s.anh; }).slice(0, 2).map(function (s) { return giaiMa(s.anh); });
+    var can = kh.canh.filter(function (s) { return s.anh; }).slice(0, 2).map(function (s) { return giaiMa(s.anh, kh.nho); });
     return Promise.all(can);
+  }
+  function boNhoAnhGoc() {
+    LRU.goc.forEach(function (k) { if (BMP[k] && BMP[k].b && BMP[k].b.close) BMP[k].b.close(); delete BMP[k]; });
+    LRU.goc = [];
   }
 
   /* ================= vẽ ================= */
@@ -233,6 +274,25 @@
     });
     if (d) dong.push(d);
     return dong;
+  }
+
+  /* Thu nhỏ chữ dần cho tới khi vừa số dòng cho phép — không cắt mất chữ anh đã gõ.
+     Chỉ khi nhỏ tới 55% mà vẫn dài mới thêm dấu "…" (ô sửa chữ sẽ báo trước). */
+  function vuaKhung(ctx, chu, rong, size, maxDong, dam) {
+    var s = size, dong;
+    for (var k = 0; k < 7; k++) {
+      ctx.font = f(dam, s);
+      dong = catDong(ctx, chu, rong);
+      if (dong.length <= maxDong) return { size: s, dong: dong, du: true };
+      s *= 0.91;
+    }
+    ctx.font = f(dam, s);
+    dong = catDong(ctx, chu, rong);
+    if (dong.length > maxDong) {
+      dong = dong.slice(0, maxDong);
+      dong[maxDong - 1] = dong[maxDong - 1].replace(/\s*\S*$/, "") + "…";
+    }
+    return { size: s, dong: dong, du: false };
   }
 
   function hcnTron(ctx, x, y, w, h, r) {
@@ -306,11 +366,11 @@
   function vePhuDe(ctx, W, H, u, chu, cai, p) {
     if (!chu) return;
     var co = { nho: 40, vua: 50, lon: 64 }[cai.coChu] || 50;
-    var size = co * u;
     ctx.save();
-    ctx.font = f(700, size);
     var maxW = W - 140 * u;
-    var dong = catDong(ctx, chu, maxW - 56 * u).slice(0, 3);
+    var vua = vuaKhung(ctx, chu, maxW - 56 * u, co * u, 3, 700);
+    var size = vua.size, dong = vua.dong;
+    ctx.font = f(700, size);
     var lh = size * 1.28, bh = dong.length * lh + 44 * u;
     var bw = Math.min(maxW, Math.max.apply(null, dong.map(function (d) { return ctx.measureText(d).width; })) + 64 * u);
     var doc = H > W;
@@ -331,15 +391,15 @@
   }
 
   function veMo(ctx, W, H, u, s, p, kh) {
-    veAnh(ctx, W, H, bmp(s.anh), p, kh.cai.chuyenDong, 0);
+    veAnh(ctx, W, H, bmp(s.anh, kh.nho), p, kh.cai.chuyenDong, 0);
     var doc = H > W;
     var g = ctx.createLinearGradient(0, 0, 0, H * 0.62);
     g.addColorStop(0, "rgba(20,4,6,0.82)"); g.addColorStop(0.55, "rgba(20,4,6,0.45)"); g.addColorStop(1, "rgba(20,4,6,0)");
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * 0.62);
-    var size = (doc ? 86 : 72) * u;
     ctx.save();
+    var vua = vuaKhung(ctx, String(kh.hook || "").toUpperCase(), W - 130 * u, (doc ? 86 : 72) * u, doc ? 4 : 3, 800);
+    var size = vua.size, dong = vua.dong;
     ctx.font = f(800, size);
-    var dong = catDong(ctx, String(kh.hook || "").toUpperCase(), W - 130 * u).slice(0, 4);
     var y0 = doc ? H * 0.17 : 150 * u, lh = size * 1.12;
     var vao = raNhanh(kep(p / 0.18));
     ctx.globalAlpha *= vao;
@@ -354,7 +414,7 @@
   }
 
   function veAnhCanh(ctx, W, H, u, s, p, kh) {
-    veAnh(ctx, W, H, bmp(s.anh), p, kh.cai.chuyenDong, s.so);
+    veAnh(ctx, W, H, bmp(s.anh, kh.nho), p, kh.cai.chuyenDong, s.so);
     vePhuDe(ctx, W, H, u, s.chu, kh.cai, p);
     if (kh.cai.coLogo) veLogo(ctx, W, H, u, H > W);
   }
@@ -430,6 +490,8 @@
   function veKhung(ctx, W, H, kh, t) {
     var u = Math.min(W, H) / 1080;
     ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";     // thu ảnh 2560px vào khung 1080px mà không bị răng cưa
     ctx.fillStyle = DO; ctx.fillRect(0, 0, W, H);
     var dang = kh.canh.filter(function (s) { return t >= s.bd && t < s.kt; });
     if (!dang.length) dang = [kh.canh[kh.canh.length - 1]];
@@ -464,11 +526,14 @@
   function moXemThu(canvas, kh) {
     dungXem();
     var ctx = canvas.getContext("2d");
+    kh.nho = true;                        // khung xem dùng ảnh nhỏ cho mượt
     var p = { kh: kh, t: 0, chay: false, raf: 0, moc: 0, ctx: canvas.getContext("2d"), canvas: canvas };
     PL = p;
     function veLai() {
-      chuanBi(p.kh, p.t, 3.5);
+      var cho = chuanBi(p.kh, p.t, 3.5);
       veKhung(ctx, canvas.width, canvas.height, p.kh, p.t);
+      // đang dừng mà ảnh chưa giải mã xong: vẽ lại khi xong, không để khung trống đỏ
+      if (!p.chay && cho.length) Promise.all(cho).then(function () { if (PL === p && !p.chay) veLai(); });
       var tua = document.getElementById("v-tua"), gio = document.getElementById("v-gio");
       if (tua) tua.value = Math.round(p.t / p.kh.tong * 1000);
       if (gio) gio.textContent = mmss(p.t) + " / " + mmss(p.kh.tong);
@@ -490,6 +555,7 @@
     p.dung = function () { p.chay = false; cancelAnimationFrame(p.raf); nutChoi(false); };
     p.tua = function (t) { p.daChoi = true; p.t = Math.max(0, Math.min(p.kh.tong, t)); p.moc = performance.now() - p.t * 1000; if (!p.chay) veLai(); };
     p.doi = function (kh2, giuGio) {
+      kh2.nho = true;
       p.kh = kh2;
       if (!giuGio) p.t = 0;
       p.t = Math.min(p.t, kh2.tong);
@@ -527,6 +593,7 @@
   var DANG_XUAT = null;
 
   function xuatVideo(kh, am, ac, baoTien) {
+    kh.nho = false;                       // xuất video dùng ảnh gốc, nét nhất
     var kt = kichThuoc(kh.cai, false), W = kt.w, H = kt.h;
     var cv = document.createElement("canvas");
     cv.width = W; cv.height = H;
@@ -587,20 +654,34 @@
             chinh.gain.setValueAtTime(kh.cai.amLuong, tat);
             chinh.gain.linearRampToValueAtTime(0, tat + 1.1);
           }
-          var moc = performance.now(), lanBao = 0;
-          function vong(now) {
-            if (huy) return;
+          var moc = performance.now(), lanBao = 0, lanVe = moc, xongVe = false;
+          function ve1(now) {
             var t = (now - moc) / 1000;
+            lanVe = now;
             chuanBi(kh, t, 4);
             veKhung(ctx, W, H, kh, Math.min(t, kh.tong));
             if (now - lanBao > 250) { lanBao = now; baoTien(Math.min(t, kh.tong), kh.tong); }
-            if (t >= kh.tong + 0.15) {
+            if (t >= kh.tong + 0.15 && !xongVe) {
+              xongVe = true;
               setTimeout(function () { try { rec.stop(); } catch (e) { /* đã dừng */ } }, 120);
-              return;
             }
-            requestAnimationFrame(vong);
+          }
+          function vong(now) {
+            if (huy || xongVe) return;
+            ve1(now);
+            if (!xongVe) requestAnimationFrame(vong);
           }
           requestAnimationFrame(vong);
+          // dự phòng: máy chậm vẽ thì vẫn vẽ tiếp bằng đồng hồ, và luôn dừng đúng giờ — không bao giờ treo
+          var phong = setInterval(function () {
+            if (huy || xongVe) { clearInterval(phong); return; }
+            var now = performance.now();
+            if (now - lanVe > 120) ve1(now);
+          }, 40);
+          setTimeout(function () {
+            clearInterval(phong);
+            if (!xongVe && !huy) { xongVe = true; try { rec.stop(); } catch (e) { /* đã dừng */ } }
+          }, (kh.tong + 2) * 1000);
         });
       });
     }).then(function (kq) {
@@ -613,8 +694,222 @@
       if (ngu) document.removeEventListener("visibilitychange", ngu);
       if (khoa) khoa.release().catch(function () {});
       cv.remove();
+      boNhoAnhGoc();                       // trả bộ nhớ ảnh gốc cho máy
       DANG_XUAT = null;
     });
+  }
+
+  /* ================= thu giọng theo hình =================
+     Video chạy trên màn hình, câu cần đọc của từng cảnh hiện chữ to.
+     Thu đúng bằng độ dài video, nên khi xuất giọng nói khớp từng cảnh. */
+  var DANG_THU = false;
+
+  function hoTroThu() {
+    return !!(global.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  }
+  function chonDinhDangGiong() {
+    var ds = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
+    if (!global.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
+    for (var i = 0; i < ds.length; i++) if (MediaRecorder.isTypeSupported(ds[i])) return ds[i];
+    return "";
+  }
+  function soDoc(x) { return C.f1(x).replace(",0", "").replace(",", " phẩy "); }
+
+  /* câu đọc cho từng cảnh — khớp đúng chữ trên hình */
+  function loiCanh(kh) {
+    var c = kh.c;
+    var noi = function (x) { return String(x || "").replace(/\s*·\s*/g, ", "); };   // dấu · trên hình đọc thành dấu phẩy
+    return kh.canh.map(function (s) {
+      if (s.loai === "mo") return noi([kh.hook, kh.dong2].filter(Boolean).join(". ")) + ".";
+      if (s.loai === "anh") return s.chu ? noi(s.chu) + "." : "(Nói vài câu về hình này)";
+      if (s.loai === "so") return "Biên an toàn " + soDoc(c.mos) + " phần trăm. Giá thị trường " + soDoc(c.tt) +
+        " tỷ, chủ bán " + soDoc(c.gia) + " tỷ.";
+      return "Gọi em xem nhà miễn phí. Trần Văn Dũng, không chín tám ba, hai hai một, chín một một.";
+    });
+  }
+  function canhLuc(kh, t) {
+    var i = 0;
+    kh.canh.forEach(function (s, k) { if (t >= s.bd) i = k; });
+    return i;
+  }
+
+  function moThuGiong(it, c, cai, xong) {
+    var kh = keHoach(it, c, cai);
+    kh.nho = true;
+    var cau = loiCanh(kh), kt = kichThuoc(cai, true);
+    var lop = document.createElement("div");
+    lop.className = "tg";
+    lop.innerHTML = '<div class="tg-o" role="dialog" aria-label="Thu giọng theo hình">' +
+      '<div class="tg-dau"><b>Thu giọng theo hình</b><button type="button" class="tg-dong" aria-label="Đóng">✕</button></div>' +
+      '<div class="tg-than"><div class="tg-xem v-' + cai.khung + '"><canvas></canvas><div class="tg-dem" hidden></div></div>' +
+      '<div class="tg-loi"><small id="tg-nhan">Cảnh 1 / ' + kh.canh.length + '</small><p id="tg-cau"></p><small id="tg-sau"></small></div></div>' +
+      '<div class="tg-thanh"><span id="tg-tien"></span></div>' +
+      '<div class="tg-gio"><span id="tg-trang">Sẵn sàng</span><span id="tg-gio">0:00 / ' + mmss(kh.tong) + "</span></div>" +
+      '<audio id="tg-nghe" controls hidden></audio>' +
+      '<div class="tg-nut" id="tg-nut"></div>' +
+      '<p class="tg-ghi">Bấm <b>Bắt đầu thu</b>, đếm 3-2-1 rồi đọc dòng chữ to — chữ tự đổi theo cảnh. Thu đúng ' + mmss(kh.tong) +
+      " là tự dừng. Đeo tai nghe có mic, ở chỗ yên tĩnh sẽ rõ tiếng hơn.</p></div>";
+    document.body.appendChild(lop);
+
+    var cv = lop.querySelector("canvas");
+    cv.width = kt.w; cv.height = kt.h;
+    var ctx = cv.getContext("2d");
+    var stream = null, rec = null, manh = [], raf = 0, moc = 0, blob = null, giay = 0, khoa = null, url = null, daDong = false;
+    var henDung = 0, henHien = 0, lanVe = 0;
+    var mime = chonDinhDangGiong();
+    var luot = 0;                         // mỗi lần bấm thu / huỷ là một lượt mới — đếm ngược của lượt cũ tự bỏ
+
+    function hien(t) {
+      chuanBi(kh, t, 3.5);
+      veKhung(ctx, cv.width, cv.height, kh, Math.min(t, kh.tong));
+      var i = canhLuc(kh, t);
+      lop.querySelector("#tg-nhan").textContent = "Cảnh " + (i + 1) + " / " + kh.canh.length;
+      lop.querySelector("#tg-cau").textContent = cau[i];
+      lop.querySelector("#tg-sau").textContent = cau[i + 1] ? "Tiếp: " + cau[i + 1] : "";
+      lop.querySelector("#tg-tien").style.width = Math.round(Math.min(1, t / kh.tong) * 100) + "%";
+      lop.querySelector("#tg-gio").textContent = mmss(t) + " / " + mmss(kh.tong);
+    }
+    function nut(html) { lop.querySelector("#tg-nut").innerHTML = html; }
+    function trang(s, dangThu) {
+      var o = lop.querySelector("#tg-trang");
+      o.textContent = s;
+      o.classList.toggle("dang-thu", !!dangThu);
+    }
+    function tatMic() {
+      if (stream) stream.getTracks().forEach(function (tr) { tr.stop(); });
+      stream = null;
+      if (khoa) { khoa.release().catch(function () {}); khoa = null; }
+    }
+    function dong() {
+      daDong = true;
+      cancelAnimationFrame(raf);
+      clearTimeout(henDung); clearInterval(henHien);
+      if (rec && rec.state !== "inactive") { try { rec.stop(); } catch (er) { /* đã dừng */ } }
+      tatMic();
+      if (url) URL.revokeObjectURL(url);
+      document.removeEventListener("visibilitychange", roiApp);
+      DANG_THU = false;
+      lop.remove();
+    }
+    function roiApp() {
+      if (document.visibilityState === "hidden" && rec && rec.state === "recording") {
+        trang("Bị dừng vì anh rời app — thu lại nhé");
+        blob = null;
+        try { rec.stop(); } catch (er) { /* đã dừng */ }
+      }
+    }
+    function sanSang() {
+      DANG_THU = false;
+      hien(1.4);
+      trang("Sẵn sàng");
+      nut('<button type="button" class="btn" data-tg="bat">Bắt đầu thu</button>');
+    }
+    function demNguoc(n, cuaLuot, xongDem) {
+      var o = lop.querySelector(".tg-dem");
+      if (daDong || cuaLuot !== luot) { o.hidden = true; return; }
+      o.hidden = false; o.textContent = n;
+      if (n <= 0) { o.hidden = true; xongDem(); return; }
+      setTimeout(function () { demNguoc(n - 1, cuaLuot, xongDem); }, 900);
+    }
+    function batDau() {
+      var cuaLuot = ++luot;
+      nut('<button type="button" class="btn alt" disabled>Đang mở micro…</button>');
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+        .then(function (s) {
+          if (daDong || cuaLuot !== luot) { s.getTracks().forEach(function (tr) { tr.stop(); }); return; }
+          stream = s;
+          DANG_THU = true;
+          hien(0);
+          trang("Chuẩn bị…");
+          nut('<button type="button" class="btn alt" data-tg="huy">Huỷ</button>');
+          demNguoc(3, cuaLuot, ghi);
+        })
+        .catch(function (er) {
+          var tuChoi = er && (er.name === "NotAllowedError" || er.name === "SecurityError");
+          trang(tuChoi ? "Chưa cho dùng micro" : "Không mở được micro");
+          lop.querySelector("#tg-cau").textContent = tuChoi
+            ? "Anh chưa cho app dùng micro. Vào Cài đặt điện thoại → Safari (hoặc Chrome) → Micro → Cho phép, rồi thử lại."
+            : "Không mở được micro: " + ((er && er.message) || "lỗi không rõ");
+          lop.querySelector("#tg-sau").textContent = "";
+          nut('<button type="button" class="btn" data-tg="bat">Thử lại</button>');
+        });
+    }
+    function ghi() {
+      if (daDong) return;
+      manh = []; blob = null;
+      try {
+        rec = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 128000 } : {});
+      } catch (er) {
+        rec = new MediaRecorder(stream);
+      }
+      rec.ondataavailable = function (ev) { if (ev.data && ev.data.size) manh.push(ev.data); };
+      rec.onstop = function () {
+        cancelAnimationFrame(raf);
+        clearTimeout(henDung); clearInterval(henHien);
+        giay = Math.min(kh.tong, (performance.now() - moc) / 1000);   // thời lượng theo đồng hồ thật
+        tatMic();
+        DANG_THU = false;
+        if (daDong) return;
+        if (!manh.length || giay < 1) { sanSang(); return; }
+        blob = new Blob(manh, { type: (rec.mimeType || mime || "audio/webm").split(";")[0] });
+        if (url) URL.revokeObjectURL(url);
+        url = URL.createObjectURL(blob);
+        var nghe = lop.querySelector("#tg-nghe");
+        nghe.src = url; nghe.hidden = false;
+        trang("Đã thu " + mmss(giay) + " — nghe lại rồi chọn");
+        hien(1.4);
+        nut('<button type="button" class="btn alt" data-tg="lai">Thu lại</button>' +
+          '<button type="button" class="btn" data-tg="dung">Dùng giọng này</button>');
+      };
+      document.addEventListener("visibilitychange", roiApp);
+      if (navigator.wakeLock && navigator.wakeLock.request) {
+        navigator.wakeLock.request("screen").then(function (k) { khoa = k; }).catch(function () {});
+      }
+      rec.start(500);
+      moc = performance.now();
+      trang("● Đang thu", true);
+      nut('<button type="button" class="btn rui" data-tg="dungthu">Dừng</button>');
+      // Đồng hồ thật quyết định lúc dừng — kể cả khi máy tạm ngừng vẽ khung hình
+      henDung = setTimeout(function () {
+        if (rec && rec.state === "recording") { try { rec.stop(); } catch (er) { /* đã dừng */ } }
+      }, (kh.tong + 0.25) * 1000);
+      // chữ đọc vẫn đổi theo cảnh dù khung hình bị chậm
+      henHien = setInterval(function () {
+        if (rec && rec.state === "recording" && performance.now() - lanVe > 300) hien((performance.now() - moc) / 1000);
+      }, 250);
+      (function vong(now) {
+        if (daDong || !rec || rec.state !== "recording") return;
+        lanVe = performance.now();
+        hien((now - moc) / 1000);
+        raf = requestAnimationFrame(vong);
+      })(performance.now());
+    }
+
+    lop.addEventListener("click", function (ev) {
+      if (ev.target.closest(".tg-dong")) { dong(); return; }
+      var b = ev.target.closest("[data-tg]");
+      if (!b) return;
+      var lam = b.getAttribute("data-tg");
+      if (lam === "bat" || lam === "lai") {
+        var nghe = lop.querySelector("#tg-nghe");
+        nghe.pause(); nghe.hidden = true;
+        batDau();
+      } else if (lam === "huy") {
+        luot++; tatMic(); DANG_THU = false; sanSang();
+      } else if (lam === "dungthu") {
+        try { rec.stop(); } catch (er) { /* đã dừng */ }
+      } else if (lam === "dung" && blob) {
+        var duoi = /mp4/i.test(blob.type) ? ".m4a" : (/ogg/i.test(blob.type) ? ".ogg" : ".webm");
+        var b2 = blob, g2 = giay;
+        luuAm(it.id, b2, "giong-doc" + duoi, { loai: "giong", tong: kh.tong, giay: g2 }).then(function (am) {
+          dong();
+          xong(am);
+        }, function () { C.toast("Không lưu được giọng đọc — máy có thể đầy bộ nhớ", 5); });
+      }
+    });
+
+    choAnhDau(kh).then(choFont).then(function () { if (!daDong && !DANG_THU) hien(1.4); });
+    sanSang();
   }
 
   /* ================= bài đăng ================= */
@@ -627,7 +922,7 @@
     L.push(tieu.join(" "));
     if (c.coGia && c.mos >= 15) L.push("Thấp hơn giá thị trường " + C.f1(c.chenh) + " tỷ · biên an toàn " + C.f1(c.mos) + "%");
     L.push("");
-    L.push("Dành cho " + c.kh.ten.toLowerCase() + ": " + c.kh.goc + ".");
+    L.push("Phù hợp " + c.kh.ten.toLowerCase() + " — " + c.kh.goc + ".");
     L.push("");
     L.push("THÔNG TIN");
     if (c.dt > 0) L.push("- Diện tích: " + C.f0(c.dt) + " m²");
@@ -660,21 +955,23 @@
     if (c.gia > 0) d += " — " + C.f1(c.gia) + " tỷ";
     if (c.coGia && c.mos > 0) d += ", thấp hơn giá thị trường " + C.f1(c.mos) + "%";
     d += ". Gọi 0983.221911 xem nhà miễn phí.";
-    var kv = (c.khu || "TPHCM").replace(/\s+/g, "");
-    return d + "\n\n#CheckInBDS #BDSTPHCM #" + kv + " #DauTuBDS #BienAnToan20 #NhaDep";
+    var kv = C.boDau(c.khu) || "TPHCM";
+    return d + "\n\n#CheckInBDS #" + C.boDau(c.loai) + kv + " #" + kv + " #BDSTPHCM #DauTuBDS #BienAnToan20";
   }
 
   /* ================= màn hình ================= */
   function e(s) { return C.esc(s); }
 
+  function moiNhat(ds) {
+    return ds.slice().sort(function (a, b) { return (b.sua || 0) - (a.sua || 0); });
+  }
+
   function chonTaiSan(r) {
     var ds = C.items();
     if (!ds.length) return null;
-    var id = r.id || C.cai().videoTs;
-    if (!id || !C.tim(id)) {
-      var coAnh = ds.filter(function (it) { return global.Anh && Anh.dem(it.id); });
-      id = (coAnh[0] || ds[0]).id;
-    }
+    // không chỉ định căn nào: mở căn anh vừa làm gần nhất
+    var id = r.id;
+    if (!id || !C.tim(id)) id = moiNhat(ds)[0].id;
     C.cai().videoTs = id;
     return C.tim(id);
   }
@@ -692,7 +989,7 @@
     var soBan = banCua(it.id).length;
     var h = '<div class="screen" id="studio" data-id="' + e(it.id) + '">';
     h += '<div class="chon-ts"><label for="v-ts">Tài sản</label><select id="v-ts">' +
-      C.items().map(function (x) {
+      moiNhat(C.items()).map(function (x) {
         var n = global.Anh ? Anh.dem(x.id) : 0;
         return '<option value="' + e(x.id) + '"' + (x.id === it.id ? " selected" : "") + ">" +
           e((x.dc || "Chưa đặt tên") + (n ? " · " + n + " ảnh" : " · chưa có ảnh")) + "</option>";
@@ -742,13 +1039,15 @@
     var dung = anh.dung;
     h += '<div class="v-hang v-hang-mo"><div class="v-nho">' + (dung[0] ? '<img data-thumb="' + e(dung[0]) + '" alt="">' : '<span class="v-nen"></span>') + "<em>Mở</em></div>" +
       '<div class="v-o"><label for="v-hook">Câu mở đầu — chữ lớn vàng đồng</label>' +
-      '<textarea id="v-hook" rows="2" data-chu="hook">' + e(cai.hook != null ? cai.hook : hookGoiY(c)) + "</textarea></div></div>";
+      '<textarea id="v-hook" rows="2" data-chu="hook">' + e(cai.hook != null ? cai.hook : hookGoiY(c)) + "</textarea>" +
+      '<small class="v-canh-chu" id="canh-hook">' + chuCanh(doVua(cai.hook != null ? cai.hook : hookGoiY(c), "hook", cai)) + "</small></div></div>";
     var goi = phuDeGoiY(c);
     dung.slice(1).forEach(function (id, i) {
       var chu = cai.phuDe[id] != null ? cai.phuDe[id] : (goi[i] || "");
       h += '<div class="v-hang"><div class="v-nho"><img data-thumb="' + e(id) + '" alt=""><em>' + (i + 2) + "</em></div>" +
         '<div class="v-o"><label for="v-pd-' + e(id) + '">Chữ trên ảnh ' + (i + 2) + "</label>" +
         '<input id="v-pd-' + e(id) + '" data-chu="pd" data-anh="' + e(id) + '" value="' + e(chu) + '" placeholder="Để trống = không có chữ" autocomplete="off"' + (cai.coPhuDe ? "" : " disabled") + ">" +
+        '<small class="v-canh-chu" id="canh-' + e(id) + '">' + (cai.coPhuDe ? chuCanh(doVua(chu, "pd", cai)) : "") + "</small>" +
         '<div class="v-nut-hang">' +
         '<button type="button" data-di="' + e(id) + '" data-huong="-1" aria-label="Lên trước">▲</button>' +
         '<button type="button" data-di="' + e(id) + '" data-huong="1" aria-label="Xuống sau">▼</button>' +
@@ -791,10 +1090,15 @@
       '<p class="v-nhan">Chất lượng</p><div class="v-chips">' +
       chip("chatLuong", "1080", cai.chatLuong, "1080p — nét nhất") + chip("chatLuong", "720", cai.chatLuong, "720p — nhẹ, xuất nhanh") + "</div></div>";
 
-    h += '<div class="card"><h2>Âm thanh</h2><div id="v-am">' + amHTML(null) + "</div>" +
+    h += '<div class="card"><h2>Giọng đọc &amp; âm thanh</h2><div id="v-am">' + amHTML(null, 0) + "</div>" +
+      '<div id="v-am-canh"></div>' +
+      '<div class="btn-row"><button type="button" class="btn" id="v-thu">' +
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" style="display:inline;vertical-align:-3px;margin-right:6px"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zm-7 9h2a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.9V21h-2v-2.1A7 7 0 0 1 5 12z"/></svg>' +
+      "Thu giọng theo hình</button>" +
+      '<button type="button" class="btn alt" id="v-am-chon">Chọn file từ máy</button></div>' +
       '<p class="v-nhan">Âm lượng <b id="v-am-so">' + Math.round(cai.amLuong * 100) + "%</b></p>" +
       '<input type="range" id="v-amluong" min="0" max="1" step="0.05" value="' + cai.amLuong + '" aria-label="Âm lượng">' +
-      '<p class="hint" style="margin:10px 0 0">Thu giọng đọc kịch bản bằng app Ghi âm của điện thoại, hoặc chọn một bản nhạc anh có quyền dùng. Âm thanh tự nhỏ dần ở 1 giây cuối.</p>' +
+      '<p class="hint" style="margin:10px 0 0"><b>Thu giọng theo hình</b>: video chạy, câu cần đọc hiện chữ to theo từng cảnh — đọc theo là giọng khớp hình. Hoặc chọn một bản nhạc anh có quyền dùng. Âm thanh tự nhỏ dần ở 1 giây cuối.</p>' +
       '<input type="file" id="v-am-file" accept="audio/*" class="an-file"></div>';
 
     h += '<div class="v-xuat"><button type="button" class="btn alt" id="v-lai">Xem từ đầu</button>' +
@@ -802,12 +1106,47 @@
     return h;
   }
 
+  var URL_AM = {};
+  function urlAm(am) {
+    var k = am.ts + "|" + am.tao;
+    if (!URL_AM[k]) URL_AM[k] = URL.createObjectURL(am.blob);
+    return URL_AM[k];
+  }
   function amHTML(am) {
-    if (!am) return '<div class="v-am-dong"><span>Chưa có âm thanh — video im lặng</span>' +
-      '<button type="button" class="btn nho" id="v-am-chon">Chọn nhạc / giọng đọc</button></div>';
-    return '<div class="v-am-dong"><span><b>' + e(am.ten || "Âm thanh") + "</b></span>" +
-      '<div><button type="button" class="btn alt nho" id="v-am-chon">Đổi</button> ' +
-      '<button type="button" class="btn rui nho" id="v-am-bo">Bỏ</button></div></div>';
+    if (!am) return '<p class="v-am-trong">Chưa có giọng đọc hay nhạc — video sẽ im lặng.</p>';
+    var giong = am.loai === "giong";
+    return '<div class="v-am-dong"><span><b>' + (giong ? "Giọng đọc của anh" : e(am.ten || "Âm thanh")) + "</b>" +
+      "<small>" + (am.giay ? mmss(am.giay) + " · " : "") + (giong ? "thu lúc " + C.gio(am.tao) + " " + C.ngay(am.tao) : "file từ máy") + "</small></span>" +
+      '<button type="button" class="btn rui nho" id="v-am-bo">Bỏ</button></div>' +
+      '<audio class="v-am-nghe" controls preload="metadata" src="' + urlAm(am) + '"></audio>';
+  }
+  /* giọng thu theo nhịp cũ mà giờ video đã đổi độ dài thì báo để thu lại */
+  function amCanhHTML(am, tong) {
+    if (!am || am.loai !== "giong" || !am.tong || Math.abs(am.tong - tong) <= 0.6) return "";
+    return '<p class="v-canh">Giọng thu cho video dài ' + mmss(am.tong) + ", video giờ dài " + mmss(tong) +
+      ". Thu lại để giọng khớp đúng từng cảnh.</p>";
+  }
+
+  /* đo trước câu chữ có vừa khung không, để báo anh ngay trong ô gõ */
+  var DO_CTX = null;
+  function doVua(chu, loai, cai) {
+    if (!chu) return "";
+    if (!DO_CTX) DO_CTX = document.createElement("canvas").getContext("2d");
+    var k = KHUNG[cai.khung] || KHUNG.doc, W = k.w, H = k.h, u = Math.min(W, H) / 1080, doc = H > W, goc, r;
+    if (loai === "hook") {
+      goc = (doc ? 86 : 72) * u;
+      r = vuaKhung(DO_CTX, String(chu).toUpperCase(), W - 130 * u, goc, doc ? 4 : 3, 800);
+    } else {
+      goc = ({ nho: 40, vua: 50, lon: 64 }[cai.coChu] || 50) * u;
+      r = vuaKhung(DO_CTX, chu, W - 196 * u, goc, 3, 700);
+    }
+    if (!r.du) return "cat";
+    return r.size < goc * 0.82 ? "nho" : "";
+  }
+  function chuCanh(kq) {
+    if (kq === "cat") return "Dài quá — phần cuối sẽ bị cắt. Rút gọn lại nhé.";
+    if (kq === "nho") return "Hơi dài — chữ sẽ được thu nhỏ cho vừa khung.";
+    return "";
   }
 
   function vBai(it, c) {
@@ -889,7 +1228,7 @@
     var kt = kichThuoc(cai, true);
     canvas.width = kt.w; canvas.height = kt.h;
     var pl = moXemThu(canvas, keHoach(it, c, cai));
-    var amHienTai = null;
+    var amHienTai = null, capNhatAm = function () {};
 
     function capNhat(giuGio, veLaiMan) {
       luuCai(it, cai);
@@ -900,6 +1239,14 @@
       if (nx) nx.textContent = "Xuất video · " + mmss(kh.tong);
       Array.prototype.forEach.call(document.querySelectorAll(".card > h2"), function (h2) {
         if (/^Dòng thời gian/.test(h2.textContent)) h2.textContent = "Dòng thời gian · " + mmss(kh.tong);
+      });
+      capNhatAm();
+      // đổi cỡ chữ thì báo lại câu nào sẽ bị thu nhỏ / cắt
+      var hk = document.getElementById("v-hook"), chk = document.getElementById("canh-hook");
+      if (hk && chk) chk.textContent = chuCanh(doVua(hk.value, "hook", cai));
+      Array.prototype.forEach.call(document.querySelectorAll('[data-chu="pd"]'), function (inp) {
+        var x = document.getElementById("canh-" + inp.getAttribute("data-anh"));
+        if (x) x.textContent = cai.coPhuDe ? chuCanh(doVua(inp.value, "pd", cai)) : "";
       });
     }
 
@@ -946,14 +1293,18 @@
       }
       var bo = t.closest("[data-bo]");
       if (bo) {
-        cai.anh = dsAnh(it, cai).dung.filter(function (x) { return x !== bo.getAttribute("data-bo"); });
+        var idBo = bo.getAttribute("data-bo");
+        cai.anh = dsAnh(it, cai).dung.filter(function (x) { return x !== idBo; });
+        cai.bo = (cai.bo || []).filter(function (x) { return x !== idBo; }).concat(idBo);
         capNhat(false, true);
         return;
       }
       var tl = t.closest("[data-themlai]");
       if (tl) {
-        var d2 = dsAnh(it, cai).dung;
-        d2.push(tl.getAttribute("data-themlai"));
+        var idLai = tl.getAttribute("data-themlai");
+        cai.bo = (cai.bo || []).filter(function (x) { return x !== idLai; });
+        var d2 = dsAnh(it, cai).dung.filter(function (x) { return x !== idLai; });
+        d2.push(idLai);
         cai.anh = d2;
         capNhat(false, true);
       }
@@ -961,10 +1312,17 @@
 
     studio.addEventListener("input", function (ev) {
       var t = ev.target;
-      if (t.getAttribute("data-chu") === "hook") { cai.hook = t.value; capNhat(true); pl.tua(Math.min(pl.t, 1.5)); return; }
+      if (t.getAttribute("data-chu") === "hook") {
+        cai.hook = t.value; capNhat(true); pl.tua(Math.min(pl.t, 1.5));
+        var ch = document.getElementById("canh-hook");
+        if (ch) ch.textContent = chuCanh(doVua(t.value, "hook", cai));
+        return;
+      }
       if (t.getAttribute("data-chu") === "pd") {
         cai.phuDe[t.getAttribute("data-anh")] = t.value;
         capNhat(true);
+        var cp = document.getElementById("canh-" + t.getAttribute("data-anh"));
+        if (cp) cp.textContent = chuCanh(doVua(t.value, "pd", cai));
         var s = pl.kh.canh.filter(function (x) { return x.anh === t.getAttribute("data-anh"); })[0];
         if (s && !pl.chay) pl.tua(s.bd + Math.min(1.2, s.dur * 0.5));
       }
@@ -1005,25 +1363,45 @@
       var box2 = document.getElementById("v-am");
       if (!box2) return;
       box2.innerHTML = amHTML(amHienTai);
-      var chon = document.getElementById("v-am-chon");
-      if (chon) chon.addEventListener("click", function () { oAm.click(); });
+      var canh = document.getElementById("v-am-canh");
+      if (canh) canh.innerHTML = amCanhHTML(amHienTai, pl.kh.tong);
       var boAm = document.getElementById("v-am-bo");
       if (boAm) boAm.addEventListener("click", function () {
         xoaAm(it.id).then(function () { amHienTai = null; veAm(); C.toast("Đã bỏ âm thanh"); });
       });
     }
+    document.getElementById("v-am-chon").addEventListener("click", function () { oAm.click(); });
+    document.getElementById("v-thu").addEventListener("click", function () {
+      if (!hoTroThu()) { C.toast("Trình duyệt này chưa thu âm được. Mở app bằng Safari (iPhone) hoặc Chrome (Android).", 5); return; }
+      pl.dung();
+      moThuGiong(it, c, cai, function (am) {
+        amHienTai = am;
+        cai.amLuong = 1;                     // giọng đọc để to rõ
+        var al2 = document.getElementById("v-amluong"), so2 = document.getElementById("v-am-so");
+        if (al2) al2.value = 1;
+        if (so2) so2.textContent = "100%";
+        luuCai(it, cai);
+        veAm();
+        C.toast("Đã gắn giọng đọc — bấm <b>Xuất video</b>", 4);
+      });
+    });
     oAm.addEventListener("change", function () {
       var fi = oAm.files && oAm.files[0];
       oAm.value = "";
       if (!fi) return;
-      luuAm(it.id, fi, fi.name).then(function () {
-        amHienTai = { blob: fi, ten: fi.name };
+      var them = { loai: "file" };
+      luuAm(it.id, fi, fi.name, them).then(function () {
+        amHienTai = { ts: it.id, blob: fi, ten: fi.name, tao: Date.now(), loai: "file" };
         veAm();
         C.toast("Đã gắn <b>" + e(fi.name) + "</b>");
       }, function () { C.toast("Không lưu được file âm thanh", 4); });
     });
     layAm(it.id).then(function (a) { amHienTai = a || null; veAm(); });
     veAm();
+    capNhatAm = function () {
+      var canh = document.getElementById("v-am-canh");
+      if (canh) canh.innerHTML = amCanhHTML(amHienTai, pl.kh.tong);
+    };
 
     // xuất
     var nut = document.getElementById("v-xuat-nut");
@@ -1060,6 +1438,7 @@
         return luuBan(meta, kq.blob, kq.thumb).then(function () {
           lop.remove();
           if (ac) ac.close().catch(function () {});
+          if (global.Anh) Anh.giuBen();      // xin máy đừng tự dọn video khi đầy bộ nhớ
           C.toast("Đã xuất <b>Bản " + so + "</b> · " + C.mb(kq.blob.size), 4);
           location.hash = "#/video/" + it.id + "/luu";
         });
@@ -1166,7 +1545,12 @@
         if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
           navigator.share({ files: [file], title: "Video " + it.dc }).then(function () {
             C.toast("Chú thích TikTok đã được copy — dán vào ô mô tả", 4);
-          }).catch(function () { /* anh bấm huỷ */ });
+          }).catch(function (er) {
+            if (er && er.name === "AbortError") return;      // anh bấm huỷ
+            // máy chặn bảng chia sẻ (ví dụ chạm quá lâu sau khi mở) — tải file về thay thế
+            C.taiVe(bl2, tenFile(b2));
+            C.toast("Không mở được bảng chia sẻ — đã tải file về. Chú thích đã được copy.", 5);
+          });
         } else {
           C.taiVe(bl2, tenFile(b2));
           C.toast("Máy không mở được bảng chia sẻ — đã tải file về. Chú thích đã được copy.", 5);
@@ -1217,13 +1601,19 @@
   /* dọn video của tài sản đã xoá hẳn */
   function donMoCoi(coId) {
     BAN.filter(function (b) { return !coId[b.ts]; }).forEach(function (b) { xoaBan(b.id); });
+    // giọng đọc / nhạc của tài sản đã xoá hẳn
+    tx("am", "readonly").then(function (t) { return chay(t.objectStore("am").getAllKeys()); })
+      .then(function (ks) { (ks || []).forEach(function (k) { if (!coId[k]) xoaAm(k); }); })
+      .catch(function () {});
   }
   function dungLuong() { return BAN.reduce(function (s, b) { return s + (b.size || 0); }, 0); }
 
   global.Studio = {
     nap: napBan, man: man, gan: gan, dung: dungXem, soBan: function (ts) { return banCua(ts).length; },
     donMoCoi: donMoCoi, dungLuong: dungLuong, tatCa: function () { return BAN.slice(); },
+    dangBan: function () { return !!DANG_XUAT || DANG_THU; },
     // cho kiểm thử
-    _keHoach: keHoach, _caiCua: caiCua, _veKhung: veKhung, _xuat: xuatVideo, _baiFb: baiFb, _baiTt: baiTt
+    _keHoach: keHoach, _caiCua: caiCua, _veKhung: veKhung, _xuat: xuatVideo, _baiFb: baiFb, _baiTt: baiTt,
+    _loiCanh: loiCanh, _dsAnh: dsAnh, _doVua: doVua, _layAm: layAm
   };
 })(window);

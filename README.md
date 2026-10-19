@@ -16,7 +16,10 @@ Vẽ từng khung lên canvas rồi ghi thành video bằng MediaRecorder. Khôn
 - **Chuyển động** zoom chậm / lia ngang / đứng yên · **chuyển cảnh** mờ dần / cắt thẳng / trượt · **nhịp** 1,5–6 giây mỗi ảnh.
 - **Chữ** cỡ nhỏ/vừa/lớn, vị trí trên/giữa/dưới, logo + số điện thoại góc trên.
 - **Khung** dọc 9:16 (TikTok, Reels) · vuông 1:1 (Facebook) · ngang 16:9 (YouTube) · **chất lượng** 1080p hoặc 720p.
-- **Âm thanh** — gắn giọng đọc hoặc nhạc từ máy, chỉnh âm lượng, tự nhỏ dần 1 giây cuối.
+- **Thu giọng theo hình** — video chạy trên màn hình, câu cần đọc của từng cảnh hiện chữ to (số đọc thành chữ: "18 phẩy 6 tỷ"). Đếm 3-2-1, thu đúng bằng độ dài video rồi tự dừng, nên giọng khớp từng cảnh khi xuất. Nghe lại, thu lại, hoặc dùng. Đổi nhịp video sau khi thu thì app báo "giọng lệch hình".
+- **Âm thanh** — hoặc gắn nhạc / giọng đọc từ file trong máy, chỉnh âm lượng, tự nhỏ dần 1 giây cuối.
+- **Chữ dài** — tự thu nhỏ cho vừa khung; dài quá thì báo ngay dưới ô gõ trước khi xuất.
+- **Ảnh chụp thêm** sau khi đã chỉnh video tự vào cuối video; ảnh anh đã bỏ thì vẫn nằm ngoài.
 - **Xuất video** MP4 H.264 (iPhone và Chrome mới), lưu thành từng phiên bản.
 - **Đã lưu** — xem lại, đánh dấu ★ bản ưng ý, gửi thẳng sang TikTok/Zalo (chú thích tự copy sẵn), tải file, dựng lại từ một bản cũ, xoá các bản chưa ưng ý.
 - **Bài đăng** — bài Facebook đủ khối (tiêu đề, thông tin, phân tích giá, CTA, miễn trừ, hashtag) và chú thích TikTok ngắn; sửa tới đâu tự lưu tới đó. Chỉ dùng số liệu anh đã nhập, **không bao giờ đưa ghi chú riêng vào bài**.

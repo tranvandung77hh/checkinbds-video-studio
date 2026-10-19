@@ -43,8 +43,8 @@
   var HUONG = ["Đông Nam", "Đông", "Nam", "Tây Nam", "Tây", "Tây Bắc", "Bắc", "Đông Bắc"];
 
   /* Mỗi lần sửa app: tăng PHIEN_BAN ở đây, ?v= trong index.html và PHIEN trong sw.js */
-  var PHIEN_BAN = 7;
-  var NGAY_BAN = "19/10/2026";
+  var PHIEN_BAN = 8;
+  var NGAY_BAN = "20/10/2026";
 
   var REPO = "https://github.com/tranvandung77hh/videostudio_OpenMontage";
   var YAML_URL = "checkinbds-brand.yaml";
@@ -311,10 +311,19 @@
     return h.slice(0, 5);
   }
 
+  /* "Quận 2" -> "Quan2", "Nhà phố" -> "NhaPho": hashtag không dấu để khách tìm được */
+  function boDau(s) {
+    return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/đ/g, "d").replace(/Đ/g, "D")
+      .split(/[^a-zA-Z0-9]+/).filter(Boolean)
+      .map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join("");
+  }
+
   function tags(c) {
-    var kv = (c.khu || "TPHCM").replace(/\s+/g, ""), lh = c.loai.replace(/\s+/g, "");
-    return ["#CheckInBDS", "#" + lh + kv, "#BanNha" + kv, "#DauTuBDS", "#BienAnToan20", "#MoS",
-      "#NhaPhoDongTien", "#BDSTPHCM", "#" + kv, "#TranVanDung"].join("  ");
+    var kv = boDau(c.khu) || "TPHCM", lh = boDau(c.loai);
+    var ds = ["#CheckInBDS", "#" + lh + kv, "#BanNha" + kv, "#DauTuBDS", "#BienAnToan20", "#MoS",
+      "#NhaPhoDongTien", "#BDSTPHCM", "#" + kv, "#TranVanDung"];
+    return ds.filter(function (x, i) { return ds.indexOf(x) === i; }).join("  ");
   }
 
   function kichBanText(c) {
@@ -1252,13 +1261,32 @@
         x.sua = x.sua || Date.now();
         x.tao = x.tao || Date.now();
         if (!x.tt_trang) x.tt_trang = "theo";
-        delete x.anhBia;            // id ảnh được cấp lại khi nhập ảnh
         if (cu) map[cu] = x.id;
         DB.items.unshift(x);
         them++;
       });
       ghi();
       return { map: map, them: them };
+    }
+
+    /* Ảnh nhập lại được cấp mã mới — đổi mã cũ sang mã mới ở ảnh bìa và cài đặt video */
+    function doiMaAnh(it, maAnh) {
+      var doi = function (id) { return maAnh[id] || null; };
+      if (it.anhBia) it.anhBia = doi(it.anhBia) || undefined;
+      var v = it.video;
+      if (v) {
+        if (Array.isArray(v.anh)) v.anh = v.anh.map(doi).filter(Boolean);
+        if (Array.isArray(v.bo)) v.bo = v.bo.map(doi).filter(Boolean);
+        if (v.phuDe) {
+          var pd = {};
+          Object.keys(v.phuDe).forEach(function (k) { if (doi(k)) pd[doi(k)] = v.phuDe[k]; });
+          v.phuDe = pd;
+        }
+      }
+      if (!it.anhBia) {
+        var ds2 = Anh.cua(it.id);
+        if (ds2.length) it.anhBia = ds2[0].id; else delete it.anhBia;
+      }
     }
 
     var file = $("file");
@@ -1272,15 +1300,18 @@
           if (!kq.json) throw new Error("trong zip không có so-lieu.json");
           var r = napItems(kq.json);
           var anh = kq.anh.filter(function (a) { return r.map[a.tsId]; });
+          var maAnh = {};                      // mã ảnh cũ -> mã ảnh mới
           return anh.reduce(function (p, a) {
-            return p.then(function () { return Anh.themBlob(a.blob, r.map[a.tsId], a.ten).catch(function () {}); });
-          }, Promise.resolve()).then(function () {
-            DB.items.forEach(function (it) {
-              if (!it.anhBia) {
-                var ds2 = Anh.cua(it.id);
-                if (ds2.length) it.anhBia = ds2[0].id;
-              }
+            return p.then(function () {
+              return Anh.themBlob(a.blob, r.map[a.tsId], a.ten).then(function (m) {
+                var cu = /^\d+-([a-z0-9]+)\./i.exec(a.ten);
+                if (cu && m) maAnh[cu[1]] = m.id;
+              }).catch(function () {});
             });
+          }, Promise.resolve()).then(function () {
+            var moi = {};
+            Object.keys(r.map).forEach(function (k) { moi[r.map[k]] = 1; });
+            DB.items.forEach(function (it) { if (moi[it.id]) doiMaAnh(it, maAnh); });
             ghi();
             t.remove();
             toast("Đã nhập <b>" + r.them + "</b> tài sản và <b>" + anh.length + "</b> ảnh", 5);
@@ -1297,6 +1328,11 @@
       fr.onload = function () {
         try {
           var r = napItems(String(fr.result));
+          // file .json không có ảnh: bỏ các mã ảnh cũ để video và ảnh bìa không trỏ vào ảnh không tồn tại
+          var moiJ = {};
+          Object.keys(r.map).forEach(function (k) { moiJ[r.map[k]] = 1; });
+          DB.items.forEach(function (it) { if (moiJ[it.id]) doiMaAnh(it, {}); });
+          ghi();
           toast("Đã nhập thêm <b>" + r.them + "</b> tài sản", 4);
           ve();
         } catch (e) { toast("File không đọc được — cần file .json hoặc .zip do app này tải ra", 4); }
@@ -1412,8 +1448,9 @@
     };
     // Gắn ngay từ đầu, không chờ trang tải xong — để không lỡ tín hiệu bản mới
     navigator.serviceWorker.addEventListener("controllerchange", function () {
-      // Anh đang gõ thì để anh gõ xong, không giật màn hình
-      if (dangGo()) toast("Đã có bản mới", 0, { nhan: "Dùng ngay", lam: napLai });
+      // Đang gõ, đang xuất video hay đang thu giọng thì để anh làm xong — không tải lại giữa chừng
+      var banViec = dangGo() || (window.Studio && Studio.dangBan());
+      if (banViec) toast("Đã có bản mới", 0, { nhan: "Dùng ngay", lam: napLai });
       else napLai();
     });
 
@@ -1501,7 +1538,7 @@
     items: function () { return DB.items; },
     cai: function () { return DB.cai; },
     tim: tim, tinh: tinh, esc: esc, f0: f0, f1: f1, mb: mb, gio: gio, ngay: ngay,
-    tags: tags, toast: toast, copy: copy, chiaSe: chiaSe, taiVe: taiVe, ve: ve,
+    tags: tags, boDau: boDau, toast: toast, copy: copy, chiaSe: chiaSe, taiVe: taiVe, ve: ve,
     ghi: ghi,
     ghiHoan: function () { clearTimeout(henGhi); henGhi = setTimeout(ghi, 300); }
   };
