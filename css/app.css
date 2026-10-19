@@ -271,6 +271,28 @@ td b{color:var(--ink)}
 
 /* ---------- ảnh ---------- */
 .seg4 button{font-size:10.5px;padding:9px 2px;letter-spacing:.02em}
+
+/* dải ảnh ngang dùng chung */
+.day-the{padding-bottom:12px}
+.day-dau{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+.day-dau h2{font-family:var(--font-d);font-size:11.5px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink);margin:0}
+.day-dau span{font-size:11.5px;color:var(--phu);white-space:nowrap}
+.day-anh{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  scroll-snap-type:x proximity;padding-bottom:2px;margin:0 -2px}
+.anh-them,.anh-nho{flex:none;width:86px;height:86px;border-radius:11px;scroll-snap-align:start;cursor:pointer}
+.anh-them{display:grid;place-content:center;justify-items:center;gap:4px;
+  background:var(--mat2);border:1.5px dashed var(--ink);color:var(--ink);
+  font-family:var(--font-d);font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  transition:transform .1s ease}
+.anh-them:active{transform:scale(.95)}
+.anh-nho{padding:0;border:1px solid var(--vien);background:var(--mat2);overflow:hidden;position:relative}
+.anh-nho img{width:100%;height:100%;object-fit:cover;display:block}
+.anh-nho.bia{outline:2.5px solid var(--vang);outline-offset:-2.5px}
+.anh-nho:active{opacity:.8}
+.an-file{position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0}
+button.anh-o{padding:0;font:inherit;width:100%;display:block}
+.phien{text-align:center;font-size:11px;color:var(--phu);margin:18px 0 0;font-variant-numeric:tabular-nums}
 .item-anh{width:60px;height:60px;flex:none;border-radius:9px;object-fit:cover;
   background:var(--mat2);border:1px solid var(--vien)}
 .anh-luoi{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:2px}

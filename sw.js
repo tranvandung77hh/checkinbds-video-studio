@@ -1,13 +1,14 @@
-/* Service worker — cho app chạy được khi mất mạng.
-   Đổi PHIEN mỗi lần sửa app để máy khách tự nhận bản mới. */
-var PHIEN = "cibds-v5";
+/* Service worker — cho app chạy được khi mất mạng và tự nhận bản mới.
+   Mỗi lần sửa app: đổi PHIEN ở đây, ?v= trong index.html và PHIEN_BAN trong js/app.js. */
+var PHIEN = "cibds-v6";
+var V = "?v=6";
 var FONT = "cibds-font-v1";
 var VO = [
   "./",
   "index.html",
-  "css/app.css",
-  "js/anh.js",
-  "js/app.js",
+  "css/app.css" + V,
+  "js/anh.js" + V,
+  "js/app.js" + V,
   "manifest.webmanifest",
   "icons/icon-192.png",
   "icons/icon-512.png",
@@ -36,7 +37,7 @@ self.addEventListener("activate", function (e) {
 });
 
 self.addEventListener("message", function (e) {
-  if (e.data === "skip") self.skipWaiting();
+  if (e.data === "skip") self.skipWaiting();   // cho các bản cũ còn gửi lệnh này
 });
 
 self.addEventListener("fetch", function (e) {
@@ -62,10 +63,16 @@ self.addEventListener("fetch", function (e) {
 
   if (url.origin !== location.origin) return;
 
-  // Điều hướng: ưu tiên mạng, mất mạng thì lấy index.html trong cache
+  // Mở trang: luôn hỏi máy chủ bản mới nhất (bỏ qua bộ nhớ đệm 10 phút của GitHub), mất mạng thì dùng bản đã lưu
   if (req.mode === "navigate") {
     e.respondWith(
-      fetch(req).catch(function () {
+      fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then(function (res) {
+        // trình duyệt không nhận trang "đã chuyển hướng" từ service worker — đóng gói lại cho sạch
+        if (!res.redirected) return res;
+        return res.blob().then(function (b) {
+          return new Response(b, { status: res.status, statusText: res.statusText, headers: res.headers });
+        });
+      }).catch(function () {
         return caches.match("index.html").then(function (r) { return r || caches.match("./"); });
       })
     );

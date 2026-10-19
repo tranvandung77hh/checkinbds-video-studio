@@ -55,7 +55,7 @@ Không framework, không build. Sửa file rồi push là xong — GitHub Pages 
 
 ## Sửa app
 
-Đổi `PHIEN` trong `sw.js` mỗi lần sửa (ví dụ `cibds-v1` → `cibds-v2`), máy khách sẽ hiện thông báo "Có bản mới".
+Mỗi lần sửa, tăng số phiên bản ở **3 chỗ** cho khớp nhau: `PHIEN_BAN` trong `js/app.js`, `?v=` trong `index.html`, `PHIEN` và `V` trong `sw.js`. Máy anh sẽ tự nhận bản mới khi mở app hoặc kéo app từ nền lên, không cần bấm gì. Số phiên bản hiện ở cuối danh sách tài sản và trong màn Vận hành.
 
 ---
 

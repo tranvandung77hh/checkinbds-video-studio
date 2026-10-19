@@ -42,6 +42,10 @@
   var LOAI = ["Nhà phố", "Biệt thự", "Shophouse", "Căn hộ", "Đất nền"];
   var HUONG = ["Đông Nam", "Đông", "Nam", "Tây Nam", "Tây", "Tây Bắc", "Bắc", "Đông Bắc"];
 
+  /* Mỗi lần sửa app: tăng PHIEN_BAN ở đây, ?v= trong index.html và PHIEN trong sw.js */
+  var PHIEN_BAN = 6;
+  var NGAY_BAN = "19/10/2026";
+
   var REPO = "https://github.com/tranvandung77hh/videostudio_OpenMontage";
   var YAML_URL = "checkinbds-brand.yaml";
   var NGAY_NHAC_SAO_LUU = 7;
@@ -600,7 +604,8 @@
       '<select id="sx" aria-label="Sắp xếp">' +
       opt([["moi", "Mới nhất"], ["mos", "MoS cao"], ["diem", "Điểm cao"], ["gia", "Giá thấp"]], DB.cai.sx || "moi") +
       "</select></div>";
-    h += '<div id="ds-body">' + thanDS() + "</div></div>";
+    h += '<div id="ds-body">' + thanDS() + "</div>";
+    h += '<p class="phien">Phiên bản ' + PHIEN_BAN + " · " + NGAY_BAN + "</p></div>";
     h += '<a class="fab" href="#/moi" aria-label="Thêm tài sản"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg></a>';
     return h;
   }
@@ -626,6 +631,7 @@
     if (tab === "anh") return h + vAnh(id, c) + "</div>";
 
     if (tab === "so") {
+      h += dayAnhHTML(id, "Ảnh tài sản");
       h += stripHTML(c) + scoreHTML(c);
       h += thieuHTML(t, id, true) + thieuHTML(t, id, false);
       h += '<div class="card"><h2>Chi tiết</h2><div class="rows">' +
@@ -689,17 +695,98 @@
     return h + "</div>";
   }
 
-  /* ============ màn hình: ảnh ============ */
+  /* ============ ảnh ============ */
   function mb(b) { return (b / 1048576).toFixed(1) + " MB"; }
 
+  var ICON_MAY = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">' +
+    '<path d="M4 7h3.2l1.6-2h6.4l1.6 2H20v12H4zm8 2.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.8a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4z"/></svg>';
+
+  /* Dải ảnh ngang: nút chụp + ảnh nhỏ. Hiện ở form Thêm, form Sửa và đầu màn hình chi tiết */
+  function dayAnhHTML(ts, tieu) {
+    return '<div data-the="' + esc(ts) + '" data-tieu="' + esc(tieu || "") + '">' + dayAnhTrong(ts, tieu) + "</div>";
+  }
+
+  function dayAnhTrong(ts, tieu) {
+    var ds = window.Anh ? Anh.cua(ts) : [];
+    var it = tim(ts), bia = it && it.anhBia;
+    return '<div class="card day-the"><div class="day-dau"><h2>' + esc(tieu || "Ảnh tài sản") + "</h2>" +
+      (ds.length ? "<span>" + ds.length + " ảnh · chạm để xem</span>" : "<span>Ảnh gốc, nét nhất</span>") + "</div>" +
+      '<div class="day-anh">' +
+      '<button type="button" class="anh-them" data-them-anh="' + esc(ts) + '">' + ICON_MAY + "<span>Chụp / chọn</span></button>" +
+      ds.map(function (m) {
+        return '<button type="button" class="anh-nho' + (m.id === bia ? " bia" : "") + '" data-xem-anh="' + esc(m.id) +
+          '" data-ts="' + esc(ts) + '" aria-label="Xem ảnh"><img data-thumb="' + esc(m.id) + '" alt=""></button>';
+      }).join("") +
+      "</div></div>";
+  }
+
+  function veDayAnh() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-the]"), function (el) {
+      el.innerHTML = dayAnhTrong(el.getAttribute("data-the"), el.getAttribute("data-tieu"));
+    });
+    var r = route();
+    var tb = document.querySelector('[data-tab="anh"]');
+    if (tb && r.id && window.Anh) { var so = Anh.dem(r.id); tb.textContent = "Ảnh" + (so ? " " + so : ""); }
+    veThumb();
+  }
+
+  /* Ảnh vừa đổi: màn hình lưới thì vẽ lại cả trang, còn lại chỉ vẽ lại dải ảnh để không mất chữ anh đang gõ */
+  function lamMoiAnh() {
+    var r = route();
+    if ((r.t === "ts" && r.tab === "anh") || r.t === "ds") { ve(); return; }
+    veDayAnh();
+  }
+
+  /* Ô chọn file dùng chung, nằm sẵn trong trang (iPhone cần ô này có thật trong trang mới mở được máy ảnh) */
+  var oFile = null;
+  function oChonAnh() {
+    if (oFile) return oFile;
+    oFile = document.createElement("input");
+    oFile.type = "file";
+    oFile.accept = "image/*";
+    oFile.multiple = true;
+    oFile.className = "an-file";
+    oFile.setAttribute("aria-hidden", "true");
+    oFile.tabIndex = -1;
+    document.body.appendChild(oFile);
+    oFile.addEventListener("change", function () {
+      var ts = oFile.getAttribute("data-ts");
+      var fs = Array.prototype.slice.call(oFile.files || []);
+      oFile.value = "";               // để chọn lại đúng ảnh đó lần sau vẫn nhận
+      if (ts && fs.length) themAnh(ts, fs);
+    });
+    return oFile;
+  }
+
+  function themAnh(ts, fs) {
+    if (!window.Anh) { toast("Máy không hỗ trợ lưu ảnh", 4); return; }
+    var t = toast("Đang xử lý ảnh <b>1/" + fs.length + "</b>…", 0);
+    var xong = 0, loi = 0;
+    fs.reduce(function (p, f, i) {
+      return p.then(function () {
+        t.innerHTML = "Đang xử lý ảnh <b>" + (i + 1) + "/" + fs.length + "</b>…";
+        return Anh.them(f, ts).then(function () { xong++; }, function () { loi++; });
+      });
+    }, Promise.resolve()).then(function () {
+      t.remove();
+      var it = tim(ts);
+      if (it && !it.anhBia) {
+        var ds = Anh.cua(ts);
+        if (ds.length) { it.anhBia = ds[0].id; it.sua = Date.now(); ghi(); }
+      }
+      Anh.giuBen();                   // xin máy đừng tự dọn ảnh khi đầy bộ nhớ
+      toast(loi ? "Đã thêm " + xong + " ảnh, " + loi + " ảnh lỗi" : "Đã thêm <b>" + xong + "</b> ảnh", 3);
+      lamMoiAnh();
+    });
+  }
+
+  /* Tab Ảnh: lưới lớn + tải zip */
   function vAnh(id, c) {
     var ds = window.Anh ? Anh.cua(id) : [];
-    var it = tim(id);
-    var bia = it && it.anhBia;
+    var it = tim(id), bia = it && it.anhBia;
     var h = '<div class="card"><h2>Ảnh tài sản</h2>' +
       '<p class="hint">Ảnh dưới 2560px được giữ <b>nguyên bản gốc</b>, không nén lại. Ảnh lớn hơn thu về 2560px chất lượng 92% — đủ nét cho video dọc 1080×1920 và còn dư để zoom. Ảnh nằm trong máy anh, không lên mạng.</p>' +
-      '<label class="btn" for="them-anh">Chụp hoặc chọn ảnh</label>' +
-      '<input type="file" id="them-anh" accept="image/*" multiple hidden>';
+      '<button class="btn" type="button" data-them-anh="' + esc(id) + '">Chụp hoặc chọn ảnh</button>';
     if (ds.length) {
       h += '<p class="hint" style="margin:10px 0 0">' + ds.length + " ảnh · " + mb(Anh.dungLuong(id)) +
         " · lớn nhất " + Math.max.apply(null, ds.map(function (m) { return Math.max(m.w || 0, m.h || 0); })) + "px</p>";
@@ -707,28 +794,25 @@
     h += "</div>";
 
     if (!ds.length) {
-      h += '<div class="card empty"><svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">' +
-        '<path d="M4 6h3l1.6-2h6.8L17 6h3v13H4zm8 3a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z"/></svg>' +
+      return h + '<div class="card empty">' + ICON_MAY.replace('width="24" height="24"', 'width="48" height="48"') +
         "<h2>Chưa có ảnh nào</h2><p>Chụp ngay lúc đi xem nhà. Sau này không phải lục lại thư viện ảnh, và OpenMontage dựng video thẳng từ đúng những tấm này.</p></div>";
-      return h;
     }
 
     h += '<div class="anh-luoi">' + ds.map(function (m) {
-      return '<div class="anh-o' + (m.id === bia ? " bia" : "") + '" data-anh="' + esc(m.id) + '">' +
-        '<img data-thumb="' + esc(m.id) + '" alt="Ảnh tài sản" loading="lazy">' +
+      return '<button type="button" class="anh-o' + (m.id === bia ? " bia" : "") + '" data-xem-anh="' + esc(m.id) + '" data-ts="' + esc(id) + '" aria-label="Xem ảnh">' +
+        '<img data-thumb="' + esc(m.id) + '" alt="" loading="lazy">' +
         (m.id === bia ? '<span class="anh-bia">Ảnh bìa</span>' : "") +
-        '<span class="anh-px">' + (m.w ? m.w + "×" + m.h : "gốc") + "</span>" +
-        "</div>";
+        '<span class="anh-px">' + (m.w ? m.w + "×" + m.h : "gốc") + "</span></button>";
     }).join("") + "</div>";
 
-    h += '<button class="btn alt" type="button" id="tai-anh">Tải tất cả ảnh (.zip)</button>';
+    h += '<button class="btn alt" type="button" data-zip-anh="' + esc(id) + '">Tải tất cả ảnh (.zip)</button>';
     h += '<p class="hint" style="margin-top:10px">Giải nén thư mục <code>anh-' +
       esc(window.Anh ? Anh.khongDau(c.dc) : "tai-san") + '</code> vào thư mục OpenMontage trên laptop. Prompt đã trỏ sẵn đúng tên này.</p>';
     return h;
   }
 
-  function moXem(id, anhId) {
-    var ds = Anh.cua(id), vt = 0;
+  function moXem(ts, anhId) {
+    var ds = Anh.cua(ts), vt = 0;
     ds.forEach(function (m, i) { if (m.id === anhId) vt = i; });
     var lop = document.createElement("div");
     lop.className = "xem";
@@ -743,32 +827,39 @@
     document.body.appendChild(lop);
 
     var img = lop.querySelector("img"), url = null;
-    function ve() {
+    function hien() {
       if (!ds.length) { dong(); return; }
       if (vt < 0) vt = ds.length - 1;
       if (vt >= ds.length) vt = 0;
       lop.querySelector(".xem-so").textContent = (vt + 1) + "/" + ds.length;
       if (url) URL.revokeObjectURL(url);
-      Anh.urlGoc(ds[vt].id).then(function (u) {
-        if (!u) return;
-        url = u; img.src = u;
-      });
+      Anh.urlGoc(ds[vt].id).then(function (u) { if (u) { url = u; img.src = u; } });
     }
     function dong() {
       if (url) URL.revokeObjectURL(url);
       lop.remove();
     }
+    // vuốt trái/phải để chuyển ảnh
+    var x0 = null;
+    lop.addEventListener("touchstart", function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+    lop.addEventListener("touchend", function (e) {
+      if (x0 == null) return;
+      var dx = e.changedTouches[0].clientX - x0;
+      x0 = null;
+      if (Math.abs(dx) > 50) { vt += dx < 0 ? 1 : -1; hien(); }
+    });
     lop.addEventListener("click", function (e) {
       var b = e.target.closest("button");
       if (!b) { if (e.target === lop) dong(); return; }
-      if (b.hasAttribute("data-di")) { vt += parseInt(b.getAttribute("data-di"), 10); ve(); return; }
+      if (b.hasAttribute("data-di")) { vt += parseInt(b.getAttribute("data-di"), 10); hien(); return; }
       var lam = b.getAttribute("data-lam");
       if (lam === "dong") { dong(); return; }
       if (lam === "bia") {
-        var it = tim(id);
+        var it = tim(ts);
         if (it) { it.anhBia = ds[vt].id; it.sua = Date.now(); ghi(); }
+        else { DB.cai.nhapBia = ds[vt].id; ghi(); }
         toast("Đã đặt ảnh bìa");
-        dong(); veLai();
+        dong(); lamMoiAnh();
         return;
       }
       if (lam === "xoa") {
@@ -779,58 +870,26 @@
         }
         var xid = ds[vt].id;
         Anh.xoa(xid).then(function () {
-          var it2 = tim(id);
+          var it2 = tim(ts);
           if (it2 && it2.anhBia === xid) { delete it2.anhBia; ghi(); }
-          ds = Anh.cua(id);
+          ds = Anh.cua(ts);
           toast("Đã xoá ảnh");
-          if (!ds.length) { dong(); veLai(); } else { ve(); veLai(); }
+          if (!ds.length) dong(); else hien();
+          lamMoiAnh();
         });
       }
     });
-    ve();
+    hien();
   }
 
-  function ganAnh(id) {
-    var inp = $("them-anh");
-    if (inp) inp.addEventListener("change", function () {
-      var fs = Array.prototype.slice.call(inp.files || []);
-      if (!fs.length) return;
-      var t = toast("Đang xử lý <b>" + fs.length + "</b> ảnh…", 0);
-      var xong = 0, loi = 0;
-      fs.reduce(function (p, f) {
-        return p.then(function () {
-          return Anh.them(f, id).then(function () { xong++; }, function () { loi++; });
-        });
-      }, Promise.resolve()).then(function () {
-        t.remove();
-        var it = tim(id);
-        if (it && !it.anhBia) {
-          var ds = Anh.cua(id);
-          if (ds.length) { it.anhBia = ds[0].id; it.sua = Date.now(); ghi(); }
-        }
-        toast(loi ? "Đã thêm " + xong + " ảnh, " + loi + " ảnh lỗi" : "Đã thêm <b>" + xong + "</b> ảnh");
-        veLai();
-      });
-    });
-
-    var luoi = document.querySelector(".anh-luoi");
-    if (luoi) luoi.addEventListener("click", function (e) {
-      var o = e.target.closest("[data-anh]");
-      if (o) moXem(id, o.getAttribute("data-anh"));
-    });
-
-    var tai = $("tai-anh");
-    if (tai) tai.addEventListener("click", function () {
-      var it = tim(id);
-      var t = toast("Đang đóng gói…", 0);
-      Anh.zipTaiSan(id, it ? it.dc : "tai-san").then(function (b) {
-        t.remove();
-        taiVe(b, "anh-" + Anh.khongDau(it ? it.dc : "tai-san") + ".zip");
-        toast("Đã tải ảnh");
-      }, function (e) { t.remove(); toast("Không tải được: " + e.message, 4); });
-    });
-
-    veThumb();
+  function taiZipAnh(ts) {
+    var it = tim(ts);
+    var t = toast("Đang đóng gói…", 0);
+    Anh.zipTaiSan(ts, it ? it.dc : "tai-san").then(function (b) {
+      t.remove();
+      taiVe(b, "anh-" + Anh.khongDau(it ? it.dc : "tai-san") + ".zip");
+      toast("Đã tải ảnh · " + mb(b.size));
+    }, function (e) { t.remove(); toast("Không tải được: " + esc(e.message), 4); });
   }
 
   function veThumb() {
@@ -838,9 +897,7 @@
     Array.prototype.forEach.call(document.querySelectorAll("img[data-thumb]"), function (img) {
       if (img.dataset.xong) return;
       img.dataset.xong = "1";
-      Anh.urlThumb(img.getAttribute("data-thumb")).then(function (u) {
-        if (u) img.src = u; else img.closest(".anh-o,.item-anh") && img.classList.add("trong");
-      });
+      Anh.urlThumb(img.getAttribute("data-thumb")).then(function (u) { if (u) img.src = u; });
     });
   }
 
@@ -852,16 +909,17 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 8000);
   }
 
-  function veLai() { ve(); }
-
   /* ============ màn hình: form ============ */
   function vForm(id) {
-    var it, them = !id, coNhap = false;
+    var it, them = !id, coNhap = false, nid = null;
     if (them) {
       it = moi();
+      if (!DB.cai.nhapId) { DB.cai.nhapId = uid(); ghi(); }
+      nid = DB.cai.nhapId;
       if (DB.cai.nhap) {
         try { it = Object.assign(it, JSON.parse(DB.cai.nhap)); coNhap = true; } catch (e) { /* nháp hỏng, bỏ */ }
       }
+      if (window.Anh && Anh.dem(nid)) coNhap = true;
     } else {
       it = tim(id);
       if (!it) return khongThay();
@@ -869,10 +927,12 @@
     var h = '<div class="screen" id="form" data-id="' + esc(them ? "" : id) + '">';
     if (them) {
       h += coNhap
-        ? '<div class="card canh-bao"><h2>Đang khôi phục bản nháp</h2><p class="hint">Đây là những gì anh điền dở lần trước. Muốn làm mới thì bấm nút dưới.</p><button class="btn alt" type="button" id="xoa-nhap">Bắt đầu trắng</button></div>'
-        : '<p class="hint">Điền được tới đâu lưu tới đó. Chỉ cần địa chỉ là lưu được, số liệu bổ sung sau.</p>';
+        ? '<div class="card canh-bao"><h2>Đang khôi phục bản nháp</h2><p class="hint">Đây là những gì anh điền dở lần trước, kể cả ảnh đã chụp. Muốn làm mới thì bấm nút dưới.</p><button class="btn alt" type="button" id="xoa-nhap">Bắt đầu trắng</button></div>'
+        : '<p class="hint">Chụp ảnh và gõ địa chỉ là lưu được. Số liệu bổ sung sau, điền tới đâu lưu tới đó.</p>';
+      h += dayAnhHTML(nid, "Ảnh — chụp luôn tại nhà");
     } else {
       h += '<p class="saved" id="saved">Tự lưu mỗi khi anh sửa</p>';
+      h += dayAnhHTML(id, "Ảnh tài sản");
     }
     h += formHTML(it);
     h += them
@@ -899,7 +959,15 @@
       'Tải <a href="' + YAML_URL + '" download>checkinbds-brand.yaml</a> rồi copy vào thư mục <code>styles/</code> của repo.',
       "Mở Claude Code tại thư mục đó, dán prompt từ tab Prompt của từng tài sản. Agent dừng hỏi anh duyệt ở: đề xuất → kịch bản → cảnh → asset → render."
     ];
+    var daCai = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
     return '<div class="screen">' +
+      '<div class="card"><h2>Phiên bản app</h2><div class="rows">' +
+      '<div class="row"><span>Đang dùng</span><b>Phiên bản ' + PHIEN_BAN + " · " + NGAY_BAN + "</b></div>" +
+      '<div class="row"><span>Cách mở</span><b>' + (daCai ? "App trên màn hình chính" : "Trong trình duyệt") + "</b></div>" +
+      "</div>" +
+      '<p class="hint" style="margin-top:12px">App tự cập nhật mỗi khi anh mở. Nếu thấy thiếu tính năng mới, bấm <b>Kiểm tra bản mới</b>. Vẫn chưa được thì bấm <b>Làm mới app</b> — chỉ tải lại phần mã, <b>không mất tài sản hay ảnh</b>.</p>' +
+      '<div class="btn-row"><button class="btn" type="button" id="kiem-ban">Kiểm tra bản mới</button>' +
+      '<button class="btn alt" type="button" id="lam-moi">Làm mới app</button></div></div>' +
       '<div class="card"><h2>Pipeline nào cho việc gì</h2><div class="scroll"><table>' +
       "<thead><tr><th>Việc của anh</th><th>Pipeline</th><th>Cần gì</th></tr></thead><tbody>" +
       pipes.map(function (p) { return "<tr><td>" + p[0] + "</td><td><code>" + p[1] + "</code></td><td>" + p[2] + "</td></tr>"; }).join("") +
@@ -1005,15 +1073,15 @@
 
     if (r.t === "ds") {
       ganDanhSach();
-      veThumb();
       var y = cuonDS;
       requestAnimationFrame(function () { window.scrollTo(0, y); });
     } else {
       window.scrollTo(0, 0);
       if (r.t === "sua" || r.t === "moi") gan(r.t === "sua" ? r.id : null);
       if (r.t === "luu") ganSaoLuu();
-      if (r.t === "ts" && r.tab === "anh") ganAnh(r.id);
+      if (r.t === "vh") ganVanHanh();
     }
+    veThumb();
   }
 
   /* ============ gắn sự kiện ============ */
@@ -1045,15 +1113,26 @@
     });
     var xn = $("xoa-nhap");
     if (xn) xn.addEventListener("click", function () {
-      delete DB.cai.nhap; ghi(); ve(); toast("Đã làm mới form");
+      var nid = DB.cai.nhapId;
+      var xong = function () {
+        delete DB.cai.nhap; delete DB.cai.nhapId; delete DB.cai.nhapBia;
+        ghi(); ve(); toast("Đã làm mới form");
+      };
+      if (nid && window.Anh) Anh.xoaTheoTaiSan(nid).then(xong, xong); else xong();
     });
     var btn = $("luu-moi");
     if (btn) btn.addEventListener("click", function () {
       var it = moi();
       Array.prototype.forEach.call(form.querySelectorAll("[data-k]"), function (el) { it[el.getAttribute("data-k")] = el.value; });
       if (!(it.dc || "").trim()) { toast("Nhập địa chỉ trước đã", 2.6); $("f-dc").focus(); return; }
+      if (DB.cai.nhapId) it.id = DB.cai.nhapId;        // ảnh chụp trong lúc điền form đã gắn sẵn vào id này
+      var dsAnh = window.Anh ? Anh.cua(it.id) : [];
+      if (dsAnh.length) {
+        var bia = DB.cai.nhapBia;
+        it.anhBia = dsAnh.some(function (m) { return m.id === bia; }) ? bia : dsAnh[0].id;
+      }
       DB.items.unshift(it);
-      delete DB.cai.nhap;
+      delete DB.cai.nhap; delete DB.cai.nhapId; delete DB.cai.nhapBia;
       ghi();
       toast("Đã lưu <b>" + esc(it.dc) + "</b>");
       cuonDS = 0;
@@ -1226,8 +1305,17 @@
 
   /* hành động chung */
   document.addEventListener("click", function (e) {
-    var t = e.target.closest ? e.target.closest("[data-tab],[data-xoa],[data-nhanban],[data-copy-kb],[data-copy-pr],[data-share-kb],[data-share-pr]") : null;
+    var t = e.target.closest ? e.target.closest("[data-tab],[data-xoa],[data-nhanban],[data-copy-kb],[data-copy-pr],[data-share-kb],[data-share-pr],[data-them-anh],[data-xem-anh],[data-zip-anh]") : null;
     if (!t) return;
+
+    if (t.hasAttribute("data-them-anh")) {
+      var o = oChonAnh();
+      o.setAttribute("data-ts", t.getAttribute("data-them-anh"));
+      o.click();                      // phải gọi ngay trong cú chạm thì iPhone mới mở máy ảnh
+      return;
+    }
+    if (t.hasAttribute("data-xem-anh")) { moXem(t.getAttribute("data-ts"), t.getAttribute("data-xem-anh")); return; }
+    if (t.hasAttribute("data-zip-anh")) { taiZipAnh(t.getAttribute("data-zip-anh")); return; }
 
     if (t.hasAttribute("data-tab")) {
       location.hash = "#/ts/" + t.getAttribute("data-id") + "/" + t.getAttribute("data-tab");
@@ -1285,24 +1373,81 @@
     return !!e && /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName);
   }
 
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker.register("sw.js").catch(function () { /* không có SW cũng chạy bình thường */ });
+  var dangKy = null, lanKiem = 0;
 
-      var daReload = false;
-      var napLai = function () {
-        if (daReload) return;
-        daReload = true;
-        location.reload();
-      };
-      navigator.serviceWorker.addEventListener("controllerchange", function () {
-        // Bản mới đã nhận quyền. Anh đang gõ thì để anh gõ xong, không giật màn hình.
-        if (dangGo()) {
-          toast("Đã có bản mới", 0, { nhan: "Dùng ngay", lam: napLai });
-        } else {
-          napLai();
-        }
+  function kiemBanMoi(ep) {
+    if (!dangKy) return Promise.resolve(false);
+    if (!ep && Date.now() - lanKiem < 30000) return Promise.resolve(false);
+    lanKiem = Date.now();
+    return dangKy.update().then(function () {
+      return !!(dangKy.installing || dangKy.waiting);
+    }).catch(function () { return false; });
+  }
+
+  if ("serviceWorker" in navigator) {
+    var daReload = false;
+    var napLai = function () {
+      if (daReload) return;
+      daReload = true;
+      location.reload();
+    };
+    // Gắn ngay từ đầu, không chờ trang tải xong — để không lỡ tín hiệu bản mới
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      // Anh đang gõ thì để anh gõ xong, không giật màn hình
+      if (dangGo()) toast("Đã có bản mới", 0, { nhan: "Dùng ngay", lam: napLai });
+      else napLai();
+    });
+
+    navigator.serviceWorker.register("sw.js").then(function (reg) {
+      dangKy = reg;
+      kiemBanMoi(true);
+    }).catch(function () { /* không có SW cũng chạy bình thường */ });
+
+    // iPhone mở lại app từ nền thì không tải lại trang — tự kiểm tra bản mới mỗi lần anh quay lại app
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") kiemBanMoi(false);
+    });
+    window.addEventListener("pageshow", function (e) { if (e.persisted) kiemBanMoi(true); });
+  }
+
+  function ganVanHanh() {
+    var kb = $("kiem-ban");
+    if (kb) kb.addEventListener("click", function () {
+      kb.textContent = "Đang kiểm tra…";
+      kiemBanMoi(true).then(function (co) {
+        kb.textContent = "Kiểm tra bản mới";
+        toast(co ? "Có bản mới — app sẽ tự tải lại trong giây lát"
+          : "Anh đang dùng bản mới nhất · phiên bản " + PHIEN_BAN, co ? 0 : 3);
       });
+    });
+    var lm = $("lam-moi");
+    if (lm) lm.addEventListener("click", function () {
+      if (lm.getAttribute("data-sure") !== "1") {
+        lm.setAttribute("data-sure", "1");
+        lm.textContent = "Chạm lần nữa";
+        setTimeout(function () { if (lm.isConnected) { lm.removeAttribute("data-sure"); lm.textContent = "Làm mới app"; } }, 4000);
+        return;
+      }
+      lm.textContent = "Đang làm mới…";
+      lamMoiApp();
+    });
+  }
+
+  /* Làm mới phần mã của app — KHÔNG đụng tới tài sản và ảnh */
+  function lamMoiApp() {
+    var viec = [];
+    if (navigator.serviceWorker) {
+      viec.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+        return Promise.all(rs.map(function (r) { return r.unregister(); }));
+      }));
+    }
+    if (window.caches) {
+      viec.push(caches.keys().then(function (ks) {
+        return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+      }));
+    }
+    return Promise.all(viec).catch(function () {}).then(function () {
+      location.replace(location.pathname + "?lm=" + Date.now() + "#/vh");
     });
   }
 
@@ -1336,6 +1481,7 @@
     if (!window.Anh) return;
     var co = {};
     DB.items.forEach(function (it) { co[it.id] = 1; });
+    if (DB.cai.nhapId) co[DB.cai.nhapId] = 1;    // ảnh chụp dở trong form Thêm — giữ lại
     Anh.tatCa().filter(function (m) { return !co[m.ts]; }).forEach(function (m) { Anh.xoa(m.id); });
   }
 
