@@ -152,6 +152,7 @@
     var mos = tt > 0 ? (tt - gia) / tt * 100 : 0;
     var yld = gia > 0 ? (thue * 12) / (gia * 1000) * 100 : 0;
     var c = {
+      id: it.id,
       gia: gia, tt: tt, thue: thue, dt: dt, bgd: n(it.bgd), tang: n(it.tang), pn: n(it.pn),
       mos: mos, chenh: tt - gia, dongia: dt > 0 ? gia * 1000 / dt : 0,
       yld: yld, hv: yld > 0 ? 100 / yld : 0,
@@ -355,6 +356,12 @@
     ktc.push("hướng " + c.huong);
     L.push("- " + ktc.join(", "));
     L.push("- Pháp lý: " + c.pl.ten);
+    var dsAnh = window.Anh ? Anh.cua(c.id) : [];
+    if (dsAnh.length) {
+      var px = Math.max.apply(null, dsAnh.map(function (m) { return Math.max(m.w || 0, m.h || 0); }));
+      L.push("- Ảnh thật của tài sản: " + dsAnh.length + " tấm trong thư mục anh-" + Anh.khongDau(c.dc) +
+        "/ (cạnh dài tới " + px + "px). Dùng chính những ảnh này làm hình, KHÔNG sinh ảnh AI thay thế mặt tiền hay nội thất.");
+    }
     L.push("");
     L.push("SỐ LIỆU — CHỈ DÙNG ĐÚNG CÁC SỐ NÀY, KHÔNG TỰ SUY DIỄN, KHÔNG BỊA SỐ THỊ TRƯỜNG:");
     if (c.bgd > 0) L.push("- Giá theo Bảng giá đất NQ87/2026: " + f1(c.bgd) + " tỷ");
@@ -557,13 +564,18 @@
 
     h += '<div class="list">' + ds.map(function (x) {
       var it = x.it, c = x.c, t = thieu(it, c);
+      var soAnh = window.Anh ? Anh.dem(it.id) : 0;
+      var bia = it.anhBia && window.Anh && Anh.cua(it.id).some(function (m) { return m.id === it.anhBia; });
       return '<a class="item' + (c.maTrang === "theo" ? "" : " mo") + '" href="#/ts/' + esc(it.id) + '">' +
-        '<div class="item-top"><div style="flex:1;min-width:0">' +
+        '<div class="item-top">' +
+        (bia ? '<img class="item-anh" data-thumb="' + esc(it.anhBia) + '" alt="">' : "") +
+        '<div style="flex:1;min-width:0">' +
         "<h3>" + esc(c.dc) + "</h3>" +
         '<p class="item-meta">' + esc([c.khu, c.loai, c.dt > 0 ? f0(c.dt) + " m²" : ""].filter(Boolean).join(" · ")) + "</p>" +
         (it.vd ? '<span class="chip vd">Ví dụ mẫu</span>' : "") +
         (c.trang.ngan ? '<span class="chip trang">' + esc(c.trang.ngan) + "</span>" : "") +
         (t.chan.length ? '<span class="chip thieu">Thiếu ' + t.chan.length + " thông tin</span>" : "") +
+        (soAnh ? '<span class="chip">' + soAnh + " ảnh</span>" : "") +
         '<span class="chip">' + esc(c.dang.ten.split("—")[0].trim()) + "</span>" +
         "</div>" +
         '<span class="mos-chip c-' + c.hang + '">' + (c.coGia ? f1(c.mos) + "%" : "—") + "</span></div>" +
@@ -605,10 +617,13 @@
     var c = tinh(it), t = thieu(it, c);
     tab = tab || "so";
     var h = '<div class="screen">';
-    h += '<div class="seg" role="tablist">' +
-      [["so", "Số liệu"], ["kb", "Kịch bản"], ["pr", "Prompt"]].map(function (x) {
+    var soAnh = window.Anh ? Anh.dem(id) : 0;
+    h += '<div class="seg seg4" role="tablist">' +
+      [["so", "Số liệu"], ["anh", "Ảnh" + (soAnh ? " " + soAnh : "")], ["kb", "Kịch bản"], ["pr", "Prompt"]].map(function (x) {
         return '<button type="button" role="tab" aria-selected="' + (tab === x[0]) + '" data-tab="' + x[0] + '" data-id="' + esc(id) + '">' + x[1] + "</button>";
       }).join("") + "</div>";
+
+    if (tab === "anh") return h + vAnh(id, c) + "</div>";
 
     if (tab === "so") {
       h += stripHTML(c) + scoreHTML(c);
@@ -673,6 +688,171 @@
     }
     return h + "</div>";
   }
+
+  /* ============ màn hình: ảnh ============ */
+  function mb(b) { return (b / 1048576).toFixed(1) + " MB"; }
+
+  function vAnh(id, c) {
+    var ds = window.Anh ? Anh.cua(id) : [];
+    var it = tim(id);
+    var bia = it && it.anhBia;
+    var h = '<div class="card"><h2>Ảnh tài sản</h2>' +
+      '<p class="hint">Ảnh dưới 2560px được giữ <b>nguyên bản gốc</b>, không nén lại. Ảnh lớn hơn thu về 2560px chất lượng 92% — đủ nét cho video dọc 1080×1920 và còn dư để zoom. Ảnh nằm trong máy anh, không lên mạng.</p>' +
+      '<label class="btn" for="them-anh">Chụp hoặc chọn ảnh</label>' +
+      '<input type="file" id="them-anh" accept="image/*" multiple hidden>';
+    if (ds.length) {
+      h += '<p class="hint" style="margin:10px 0 0">' + ds.length + " ảnh · " + mb(Anh.dungLuong(id)) +
+        " · lớn nhất " + Math.max.apply(null, ds.map(function (m) { return Math.max(m.w || 0, m.h || 0); })) + "px</p>";
+    }
+    h += "</div>";
+
+    if (!ds.length) {
+      h += '<div class="card empty"><svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">' +
+        '<path d="M4 6h3l1.6-2h6.8L17 6h3v13H4zm8 3a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z"/></svg>' +
+        "<h2>Chưa có ảnh nào</h2><p>Chụp ngay lúc đi xem nhà. Sau này không phải lục lại thư viện ảnh, và OpenMontage dựng video thẳng từ đúng những tấm này.</p></div>";
+      return h;
+    }
+
+    h += '<div class="anh-luoi">' + ds.map(function (m) {
+      return '<div class="anh-o' + (m.id === bia ? " bia" : "") + '" data-anh="' + esc(m.id) + '">' +
+        '<img data-thumb="' + esc(m.id) + '" alt="Ảnh tài sản" loading="lazy">' +
+        (m.id === bia ? '<span class="anh-bia">Ảnh bìa</span>' : "") +
+        '<span class="anh-px">' + (m.w ? m.w + "×" + m.h : "gốc") + "</span>" +
+        "</div>";
+    }).join("") + "</div>";
+
+    h += '<button class="btn alt" type="button" id="tai-anh">Tải tất cả ảnh (.zip)</button>';
+    h += '<p class="hint" style="margin-top:10px">Giải nén thư mục <code>anh-' +
+      esc(window.Anh ? Anh.khongDau(c.dc) : "tai-san") + '</code> vào thư mục OpenMontage trên laptop. Prompt đã trỏ sẵn đúng tên này.</p>';
+    return h;
+  }
+
+  function moXem(id, anhId) {
+    var ds = Anh.cua(id), vt = 0;
+    ds.forEach(function (m, i) { if (m.id === anhId) vt = i; });
+    var lop = document.createElement("div");
+    lop.className = "xem";
+    lop.innerHTML = '<img alt="Ảnh tài sản"><div class="xem-thanh">' +
+      '<button type="button" data-di="-1" aria-label="Ảnh trước">‹</button>' +
+      '<span class="xem-so"></span>' +
+      '<button type="button" data-di="1" aria-label="Ảnh sau">›</button></div>' +
+      '<div class="xem-nut">' +
+      '<button type="button" class="btn alt nho" data-lam="bia">Đặt làm ảnh bìa</button>' +
+      '<button type="button" class="btn rui nho" data-lam="xoa">Xoá ảnh</button>' +
+      '<button type="button" class="btn nho" data-lam="dong">Đóng</button></div>';
+    document.body.appendChild(lop);
+
+    var img = lop.querySelector("img"), url = null;
+    function ve() {
+      if (!ds.length) { dong(); return; }
+      if (vt < 0) vt = ds.length - 1;
+      if (vt >= ds.length) vt = 0;
+      lop.querySelector(".xem-so").textContent = (vt + 1) + "/" + ds.length;
+      if (url) URL.revokeObjectURL(url);
+      Anh.urlGoc(ds[vt].id).then(function (u) {
+        if (!u) return;
+        url = u; img.src = u;
+      });
+    }
+    function dong() {
+      if (url) URL.revokeObjectURL(url);
+      lop.remove();
+    }
+    lop.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) { if (e.target === lop) dong(); return; }
+      if (b.hasAttribute("data-di")) { vt += parseInt(b.getAttribute("data-di"), 10); ve(); return; }
+      var lam = b.getAttribute("data-lam");
+      if (lam === "dong") { dong(); return; }
+      if (lam === "bia") {
+        var it = tim(id);
+        if (it) { it.anhBia = ds[vt].id; it.sua = Date.now(); ghi(); }
+        toast("Đã đặt ảnh bìa");
+        dong(); veLai();
+        return;
+      }
+      if (lam === "xoa") {
+        if (b.getAttribute("data-sure") !== "1") {
+          b.setAttribute("data-sure", "1"); b.textContent = "Chạm lần nữa để xoá";
+          setTimeout(function () { if (b.isConnected) { b.removeAttribute("data-sure"); b.textContent = "Xoá ảnh"; } }, 4000);
+          return;
+        }
+        var xid = ds[vt].id;
+        Anh.xoa(xid).then(function () {
+          var it2 = tim(id);
+          if (it2 && it2.anhBia === xid) { delete it2.anhBia; ghi(); }
+          ds = Anh.cua(id);
+          toast("Đã xoá ảnh");
+          if (!ds.length) { dong(); veLai(); } else { ve(); veLai(); }
+        });
+      }
+    });
+    ve();
+  }
+
+  function ganAnh(id) {
+    var inp = $("them-anh");
+    if (inp) inp.addEventListener("change", function () {
+      var fs = Array.prototype.slice.call(inp.files || []);
+      if (!fs.length) return;
+      var t = toast("Đang xử lý <b>" + fs.length + "</b> ảnh…", 0);
+      var xong = 0, loi = 0;
+      fs.reduce(function (p, f) {
+        return p.then(function () {
+          return Anh.them(f, id).then(function () { xong++; }, function () { loi++; });
+        });
+      }, Promise.resolve()).then(function () {
+        t.remove();
+        var it = tim(id);
+        if (it && !it.anhBia) {
+          var ds = Anh.cua(id);
+          if (ds.length) { it.anhBia = ds[0].id; it.sua = Date.now(); ghi(); }
+        }
+        toast(loi ? "Đã thêm " + xong + " ảnh, " + loi + " ảnh lỗi" : "Đã thêm <b>" + xong + "</b> ảnh");
+        veLai();
+      });
+    });
+
+    var luoi = document.querySelector(".anh-luoi");
+    if (luoi) luoi.addEventListener("click", function (e) {
+      var o = e.target.closest("[data-anh]");
+      if (o) moXem(id, o.getAttribute("data-anh"));
+    });
+
+    var tai = $("tai-anh");
+    if (tai) tai.addEventListener("click", function () {
+      var it = tim(id);
+      var t = toast("Đang đóng gói…", 0);
+      Anh.zipTaiSan(id, it ? it.dc : "tai-san").then(function (b) {
+        t.remove();
+        taiVe(b, "anh-" + Anh.khongDau(it ? it.dc : "tai-san") + ".zip");
+        toast("Đã tải ảnh");
+      }, function (e) { t.remove(); toast("Không tải được: " + e.message, 4); });
+    });
+
+    veThumb();
+  }
+
+  function veThumb() {
+    if (!window.Anh) return;
+    Array.prototype.forEach.call(document.querySelectorAll("img[data-thumb]"), function (img) {
+      if (img.dataset.xong) return;
+      img.dataset.xong = "1";
+      Anh.urlThumb(img.getAttribute("data-thumb")).then(function (u) {
+        if (u) img.src = u; else img.closest(".anh-o,.item-anh") && img.classList.add("trong");
+      });
+    });
+  }
+
+  function taiVe(blob, ten) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = ten;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 8000);
+  }
+
+  function veLai() { ve(); }
 
   /* ============ màn hình: form ============ */
   function vForm(id) {
@@ -753,22 +933,29 @@
     var size = 0;
     try { size = (localStorage.getItem(KEY) || "").length; } catch (e) { /* bỏ qua */ }
     var lan = DB.cai.luuLan;
+    var soAnh = window.Anh ? Anh.tatCa().length : 0;
+    var cuaAnh = window.Anh ? Anh.dungLuong() : 0;
     return '<div class="screen">' +
       '<div class="card"><h2>Dữ liệu của anh</h2><div class="rows">' +
       '<div class="row"><span>Số tài sản</span><b>' + DB.items.length + "</b></div>" +
-      '<div class="row"><span>Dung lượng</span><b>' + (size / 1024).toFixed(1) + " KB</b></div>" +
+      '<div class="row"><span>Ảnh</span><b>' + soAnh + " ảnh · " + mb(cuaAnh) + "</b></div>" +
+      '<div class="row"><span>Số liệu</span><b>' + (size / 1024).toFixed(1) + " KB</b></div>" +
+      '<div class="row"><span>Máy còn trống</span><b id="con-trong">đang xem…</b></div>' +
       '<div class="row"><span>Sao lưu gần nhất</span><b>' + (lan ? ngay(lan) : "Chưa bao giờ") + "</b></div>" +
-      '<div class="row"><span>Nơi lưu</span><b>Máy này</b></div></div>' +
-      '<p class="hint" style="margin-top:12px">Dữ liệu nằm trong trình duyệt của máy này, không gửi lên mạng. Đổi điện thoại, xoá dữ liệu trình duyệt hoặc dùng tab ẩn danh là mất — nên tải file sao lưu định kỳ.</p></div>' +
+      '<div class="row"><span>Chống bị dọn</span><b id="giu-ben">đang xem…</b></div></div>' +
+      '<p class="hint" style="margin-top:12px">Dữ liệu và ảnh nằm trong máy này, không gửi lên mạng. Đổi điện thoại, xoá dữ liệu trình duyệt hoặc dùng tab ẩn danh là mất — nên tải file sao lưu định kỳ.</p>' +
+      '<button class="btn alt" type="button" id="bat-giu">Bật chống bị dọn</button></div>' +
 
       '<div class="card"><h2>Tải về / mang sang máy khác</h2>' +
-      '<button class="btn" type="button" id="tai">Tải file sao lưu (.json)</button>' +
-      '<button class="btn alt" type="button" id="share-json">Gửi qua Zalo / email</button>' +
+      '<p class="hint">Bản đầy đủ gồm số liệu và toàn bộ ảnh gốc — dùng cái này khi đổi máy.</p>' +
+      '<button class="btn" type="button" id="tai-zip">Sao lưu đầy đủ (.zip)</button>' +
+      '<button class="btn alt" type="button" id="tai">Chỉ số liệu (.json) — nhẹ</button>' +
+      '<button class="btn alt" type="button" id="share-json">Gửi số liệu qua Zalo / email</button>' +
       '<button class="btn alt" type="button" id="copy-json">Copy dữ liệu dạng chữ</button></div>' +
 
       '<div class="card"><h2>Nhập lại từ file</h2>' +
-      '<p class="hint">Chọn file .json đã sao lưu. Tài sản trong file sẽ được thêm vào, không ghi đè cái đang có.</p>' +
-      '<input type="file" id="file" accept=".json,application/json"></div>' +
+      '<p class="hint">Chọn file .zip (có cả ảnh) hoặc .json (chỉ số liệu) đã sao lưu. Tài sản trong file được thêm vào, không ghi đè cái đang có.</p>' +
+      '<input type="file" id="file" accept=".json,.zip,application/json,application/zip"></div>' +
 
       '<div class="card"><h2>Xoá sạch</h2>' +
       '<p class="hint">Xoá toàn bộ tài sản trong máy này. Không lấy lại được — tải file sao lưu trước đã.</p>' +
@@ -818,12 +1005,14 @@
 
     if (r.t === "ds") {
       ganDanhSach();
+      veThumb();
       var y = cuonDS;
       requestAnimationFrame(function () { window.scrollTo(0, y); });
     } else {
       window.scrollTo(0, 0);
       if (r.t === "sua" || r.t === "moi") gan(r.t === "sua" ? r.id : null);
       if (r.t === "luu") ganSaoLuu();
+      if (r.t === "ts" && r.tab === "anh") ganAnh(r.id);
     }
   }
 
@@ -874,7 +1063,7 @@
 
   function veThanDS() {
     var box = $("ds-body");
-    if (box) box.innerHTML = thanDS();
+    if (box) { box.innerHTML = thanDS(); veThumb(); }
   }
 
   function ganDanhSach() {
@@ -902,16 +1091,47 @@
     var duLieu = function () { return JSON.stringify({ v: 2, xuat: new Date().toISOString(), items: DB.items }, null, 2); };
     var danhDau = function () { DB.cai.luuLan = Date.now(); ghi(); };
 
+    var hom = new Date().toISOString().slice(0, 10);
+
+    // tình trạng bộ nhớ
+    if (window.Anh) {
+      Anh.conLai().then(function (e) {
+        var el = $("con-trong");
+        if (!el) return;
+        el.textContent = e && e.quota ? mb(e.quota - (e.usage || 0)) : "không rõ";
+      });
+      Anh.daGiuBen().then(function (b) {
+        var el = $("giu-ben");
+        if (el) el.textContent = b ? "Đang bật" : "Chưa bật";
+        var nut = $("bat-giu");
+        if (nut && b) nut.hidden = true;
+      });
+    }
+    var bg = $("bat-giu");
+    if (bg) bg.addEventListener("click", function () {
+      Anh.giuBen().then(function (b) {
+        toast(b ? "Đã bật — máy sẽ không tự dọn dữ liệu" : "Máy chưa cho bật. Cài app lên màn hình chính rồi thử lại", b ? 2.4 : 5);
+        if (b) ve();
+      });
+    });
+
+    var tz = $("tai-zip");
+    if (tz) tz.addEventListener("click", function () {
+      var t = toast("Đang đóng gói số liệu và ảnh…", 0);
+      Anh.zipTatCa(DB.items, duLieu()).then(function (b) {
+        t.remove();
+        taiVe(b, "checkinbds-saoluu-" + hom + ".zip");
+        danhDau();
+        toast("Đã tải bản đầy đủ · " + mb(b.size));
+        ve();
+      }, function (e) { t.remove(); toast("Không đóng gói được: " + e.message, 4); });
+    });
+
     var tai = $("tai");
     if (tai) tai.addEventListener("click", function () {
-      var blob = new Blob([duLieu()], { type: "application/json" });
-      var a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "checkinbds-taisan-" + new Date().toISOString().slice(0, 10) + ".json";
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      taiVe(new Blob([duLieu()], { type: "application/json" }), "checkinbds-taisan-" + hom + ".json");
       danhDau();
-      toast("Đã tải file sao lưu");
+      toast("Đã tải file số liệu");
       ve();
     });
     var sj = $("share-json");
@@ -922,27 +1142,66 @@
     var cj = $("copy-json");
     if (cj) cj.addEventListener("click", function () { copy(duLieu(), "dữ liệu"); danhDau(); });
 
+    function napItems(chuoi) {
+      var d = JSON.parse(chuoi);
+      var ds = Array.isArray(d) ? d : (d && d.items);
+      if (!Array.isArray(ds)) throw new Error("sai định dạng");
+      var map = {}, them = 0;
+      ds.forEach(function (x) {
+        if (!x || typeof x !== "object") return;
+        var cu = x.id;
+        x.id = uid();
+        x.sua = x.sua || Date.now();
+        x.tao = x.tao || Date.now();
+        if (!x.tt_trang) x.tt_trang = "theo";
+        delete x.anhBia;            // id ảnh được cấp lại khi nhập ảnh
+        if (cu) map[cu] = x.id;
+        DB.items.unshift(x);
+        them++;
+      });
+      ghi();
+      return { map: map, them: them };
+    }
+
     var file = $("file");
     if (file) file.addEventListener("change", function () {
       var f = file.files && file.files[0];
       if (!f) return;
+
+      if (/\.zip$/i.test(f.name) || /zip/i.test(f.type)) {
+        var t = toast("Đang mở file sao lưu…", 0);
+        Anh.docZipSaoLuu(f).then(function (kq) {
+          if (!kq.json) throw new Error("trong zip không có so-lieu.json");
+          var r = napItems(kq.json);
+          var anh = kq.anh.filter(function (a) { return r.map[a.tsId]; });
+          return anh.reduce(function (p, a) {
+            return p.then(function () { return Anh.themBlob(a.blob, r.map[a.tsId], a.ten).catch(function () {}); });
+          }, Promise.resolve()).then(function () {
+            DB.items.forEach(function (it) {
+              if (!it.anhBia) {
+                var ds2 = Anh.cua(it.id);
+                if (ds2.length) it.anhBia = ds2[0].id;
+              }
+            });
+            ghi();
+            t.remove();
+            toast("Đã nhập <b>" + r.them + "</b> tài sản và <b>" + anh.length + "</b> ảnh", 5);
+            ve();
+          });
+        }).catch(function (e) {
+          t.remove();
+          toast("Không đọc được file: " + esc(e.message), 5);
+        });
+        return;
+      }
+
       var fr = new FileReader();
       fr.onload = function () {
         try {
-          var d = JSON.parse(String(fr.result));
-          var ds = Array.isArray(d) ? d : (d && d.items);
-          if (!Array.isArray(ds)) throw new Error("sai định dạng");
-          var them = 0;
-          ds.forEach(function (x) {
-            if (!x || typeof x !== "object") return;
-            x.id = uid(); x.sua = x.sua || Date.now(); x.tao = x.tao || Date.now();
-            if (!x.tt_trang) x.tt_trang = "theo";
-            DB.items.unshift(x); them++;
-          });
-          ghi();
-          toast("Đã nhập thêm <b>" + them + "</b> tài sản");
+          var r = napItems(String(fr.result));
+          toast("Đã nhập thêm <b>" + r.them + "</b> tài sản", 4);
           ve();
-        } catch (e) { toast("File không đọc được — cần file .json do app này tải ra", 4); }
+        } catch (e) { toast("File không đọc được — cần file .json hoặc .zip do app này tải ra", 4); }
       };
       fr.readAsText(f);
     });
@@ -1072,8 +1331,19 @@
   }
 
   /* ============ chạy ============ */
+  /* ảnh của tài sản đã xoá hẳn thì dọn đi cho nhẹ máy */
+  function donAnhMoCoi() {
+    if (!window.Anh) return;
+    var co = {};
+    DB.items.forEach(function (it) { co[it.id] = 1; });
+    Anh.tatCa().filter(function (m) { return !co[m.ts]; }).forEach(function (m) { Anh.xoa(m.id); });
+  }
+
   doc();
   ve();
+  if (window.Anh) {
+    Anh.nap().then(function () { donAnhMoCoi(); ve(); });
+  }
   nhacSaoLuu();
   if (!DB.cai.anCai && /iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone) {
     setTimeout(function () {

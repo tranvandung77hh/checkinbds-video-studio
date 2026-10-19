@@ -269,6 +269,35 @@ td b{color:var(--ink)}
   font-family:var(--font-d);font-size:11px;font-weight:700;text-transform:uppercase;cursor:pointer}
 @keyframes tvao{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
+/* ---------- ảnh ---------- */
+.seg4 button{font-size:10.5px;padding:9px 2px;letter-spacing:.02em}
+.item-anh{width:60px;height:60px;flex:none;border-radius:9px;object-fit:cover;
+  background:var(--mat2);border:1px solid var(--vien)}
+.anh-luoi{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:2px}
+.anh-o{position:relative;aspect-ratio:4/3;max-width:100%;border-radius:10px;overflow:hidden;
+  background:var(--mat2);border:1px solid var(--vien);cursor:pointer}
+.anh-o img{width:100%;height:100%;object-fit:cover;display:block}
+.anh-o:active{transform:scale(.98)}
+.anh-o.bia{outline:2.5px solid var(--vang);outline-offset:-2.5px}
+.anh-bia{position:absolute;top:6px;left:6px;font-family:var(--font-d);font-size:9px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;background:var(--vang);color:#2B1A00;padding:3px 7px;border-radius:999px}
+.anh-px{position:absolute;bottom:6px;right:6px;font-family:var(--font-d);font-size:9.5px;font-weight:600;
+  background:rgba(0,0,0,.6);color:#fff;padding:2px 6px;border-radius:5px;font-variant-numeric:tabular-nums}
+label.btn{margin-bottom:0;cursor:pointer}
+
+.xem{position:fixed;inset:0;z-index:80;background:#0C0808;display:grid;
+  grid-template-rows:minmax(0,1fr) auto auto;gap:6px;animation:vao .16s ease-out;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px))}
+.xem img{width:100%;height:100%;min-height:0;object-fit:contain;display:block}
+.xem-thanh{display:flex;justify-content:center;align-items:center;gap:22px;color:#fff;
+  font-family:var(--font-d);font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+.xem-thanh button{background:none;border:1.5px solid rgba(255,255,255,.4);color:#fff;width:46px;height:46px;
+  border-radius:50%;font-size:24px;line-height:1;cursor:pointer}
+.xem-nut{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.xem-nut .btn{width:100%;display:block;font-size:10.5px;padding:12px 4px}
+.xem .btn.alt{color:#E3B341;border-color:#E3B341}
+.xem .btn.rui{color:#F08A82;border-color:#F08A82}
+
 .saved{font-family:var(--font-d);font-size:10px;font-weight:700;letter-spacing:.06em;
   text-transform:uppercase;color:var(--tot);margin:0;min-height:14px}
 
